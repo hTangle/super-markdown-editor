@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <title>SuperMarkdownEditor</title>
+    <link href="css/bootstrap.min.css" rel="stylesheet">
+    <link href="css/font-awesome.min.css" rel="stylesheet">
+    <script src="js/jquery.min.js"></script>
+    <script src="js/bootstrap.bundle.min.js"></script>
+    <!--    <script src="js/bstreeview.js"></script>-->
+    <link rel="stylesheet" href="css/sidebars.css"/>
+    <link rel="stylesheet" href="css/style.css"/>
+    <!--    <link rel="stylesheet" href="css/bstreeview.min.css"/>-->
+    <script src="js/sidebars.js"></script>
+    <script src="lib/editor.md/editormd.min.js"></script>
+    <link rel="stylesheet" href="themes/default/style.min.css"/>
+    <script src="js/jstree.js"></script>
+    <!-- custom css -->
+    <link rel="stylesheet" href="lib/editor.md/css/editormd.css"/>
+    <!--    <script>if (window.module) module = window.module;</script>-->
+
+    <style type="text/css">
+        html, body {
+            margin: 0;
+            height: 100%;
+        }
+    </style>
+
+
+</head>
+
+<body>
+<div class="container-fluid h-100">
+    <div class="row h-100">
+        <div class="col-2 w-100">
+            <input type="text" class="w-100">
+            <div id="jstree_demo_div" class="w-100"></div>
+        </div>
+        <div class="col-10 h-100">
+            <div id="test-editor">
+    <textarea style="display:none;">### 关于 Editor.md
+
+**Editor.md** 是一款开源的、可嵌入的 Markdown 在线编辑器（组件），基于 CodeMirror、jQuery 和 Marked 构建。
+    </textarea>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+<script>
+    var select_node_dev;
+    var select_before = "";
+    var select_before_timestamp = 0;
+    var select_current = "";
+    var select_current_timestamp = 0;
+    var global_data;
+    var init_flag = false;
+    var softwareName = "SuperMarkdownEditor";
+    var editor = editormd("test-editor", {
+        width: "100%",
+        height: "100%",
+        path: "lib/editor.md/lib/",
+        syncScrolling: "single",
+        emoji: true,
+        taskList: true,
+        tocm: true,         // Using [TOCM]
+        tex: true,
+        flowChart: true,
+        sequenceDiagram: true,
+        toolbarIcons: function () {
+            return editormd.toolbarModes['full']; // full, simple, mini
+        },
+    });
+    var current_edit_markdown_info = {};
+
+    function InitWorkSpaceTree(workSpaceData) {
+        if (init_flag || !workSpaceData) return;
+        console.log("start init work space", workSpaceData);
+        $('#jstree_demo_div').on('create_node.jstree', function (e, data) {
+            select_node_dev = data;
+            $.ajax({
+                type: "post",
+                url: "/message",
+                async: false,
+                data: JSON.stringify({
+                    command: "create_node.jstree",
+                    data: {
+                        type: data.node.type,
+                        text: data.node.text,
+                        path: data.instance.get_path(data.node)
+                    }
+                }),
+                contentType: "application/json; charset=utf-8",
+                dataType: "json",
+                success: function (data) {
+                    if (data.status === "success") {
+                    }
+                }
+            });
+
+        }).on('rename_node.jstree', function (e, data) {
+            select_node_dev = data;
+            $.ajax({
+                type: "post",
+                url: "/message",
+                async: false,
+                data: JSON.stringify({
+                    command: "rename_node.jstree",
+                    data: {
+                        type: data.node.type,
+                        text: data.node.text,
+                        path: data.instance.get_path(data.node),
+                        old: data.old
+                    }
+                }),
+                contentType: "application/json; charset=utf-8",
+                dataType: "json",
+                success: function (data) {
+                    if (data.status === "success") {
+                    }
+                }
+            });
+        }).on('changed.jstree', function (e, data) {
+            if (data.selected.length) {
+                select_current = data.selected[0];
+                select_current_timestamp = $.now();
+                if (select_current === select_before && (select_current_timestamp - select_before_timestamp) < 300) {
+                    //double click
+                    select_before = "";
+                    select_before_timestamp = select_current_timestamp;
+                    global_data = data.instance.get_node(select_current);
+                    console.log(data.instance.get_node(select_current));
+                    console.log(data.instance.get_path(select_current));
+                    console.log("The selected node is:" + global_data.text, global_data.type)
+                    $.ajax({
+                        type: "post",
+                        url: "/message",
+                        async: false,
+                        data: JSON.stringify({
+                            command: "open.jstree",
+                            data: {
+                                type: data.node.type,
+                                text: data.node.text,
+                                path: data.instance.get_path(data.node)
+                            }
+                        }),
+                        contentType: "application/json; charset=utf-8",
+                        dataType: "json",
+                        success: function (data) {
+                            if (data.status === "success" && data.data.read) {
+                                editor.setMarkdown(data.data.text);
+                                current_edit_markdown_info['path'] = data.data.path;
+                                $('title').html(softwareName + "[" + data.data.path + "]");
+                            }
+                        }
+                    })
+                } else {
+                    select_before = select_current;
+                    select_before_timestamp = select_current_timestamp;
+                }
+
+            }
+        }).jstree({
+            'core': {
+                'data': workSpaceData,
+                'check_callback': function (o, n, p, i, m) {
+                    return true;
+                },
+                'error': function (r) {
+                    console.log("**************error**********");
+                    console.log(r);
+                },
+                'themes': {
+                    'responsive': false,
+                    'variant': 'small',
+                    'stripes': true
+                },
+                dblclick_toggle: false,
+            },
+            'sort': function (a, b) {
+                return this.get_type(a) === this.get_type(b) ? (this.get_text(a) > this.get_text(b) ? 1 : -1) : (this.get_type(a) >= this.get_type(b) ? 1 : -1);
+            },
+            'contextmenu': {
+                'items': function (node) {
+                    var tmp = $.jstree.defaults.contextmenu.items();
+                    delete tmp.create.action;
+                    tmp.create.label = "New";
+                    tmp.create.separator_after = false;
+                    tmp.create.submenu = {
+                        "create_folder": {
+                            // "separator_after": true,
+                            "label": "Folder",
+                            "action": function (data) {
+                                var inst = $.jstree.reference(data.reference);
+                                var obj = inst.get_node(data.reference);
+                                inst.create_node(obj, {type: "default"}, "last", function (new_node) {
+                                    setTimeout(function () {
+                                        inst.edit(new_node);
+                                    }, 0);
+                                });
+                            }
+                        },
+                        "create_file": {
+                            "label": "File",
+                            "action": function (data) {
+                                var inst = $.jstree.reference(data.reference);
+                                console.log(inst.get_node(data.reference));
+                                var obj = inst.get_node(data.reference);
+                                inst.create_node(obj, {type: "file"}, "last", function (new_node) {
+                                    setTimeout(function () {
+                                        inst.edit(new_node);
+                                    }, 0);
+                                });
+                            }
+                        },
+                        "create_brother": {
+                            "label": "BroFolder",
+                            "action": function (data) {
+                                $("#jstree_demo_div").jstree(true).create_node('#', {type: "default"}, "last", function (new_node) {
+                                    setTimeout(function () {
+                                        $("#jstree_demo_div").jstree(true).edit(new_node);
+                                    }, 0);
+                                });
+                            }
+                        }
+                    };
+                    if (this.get_type(node) === "file") {
+                        delete tmp.create;
+                    } else if (node.parent !== '#') {
+                        delete tmp.create.submenu.create_brother;
+                    }
+                    console.log(node);
+                    return tmp;
+                }
+            },
+            "types": {
+                "#": {
+                    "max_children": 100,
+                    "max_depth": 4,
+                    "valid_children": ["root", "default"]
+                },
+                "root": {
+                    "icon": "svg/folder-solid.svg",
+                    "valid_children": ["default"]
+                },
+                "default": {
+                    "icon": "svg/folder-solid.svg",
+                    "valid_children": ["default", "file"]
+                },
+                "file": {
+                    "icon": "svg/file-solid.svg",
+                    "valid_children": []
+                }
+            },
+            'unique': {
+                'duplicate': function (name, counter) {
+                    return name + ' ' + counter;
+                }
+            },
+            'plugins': ['state', 'dnd', 'sort', 'types', 'contextmenu', 'unique']
+        });
+        init_flag = true;
+    }
+
+
+    window.onload = function () {
+
+        $.ajax({
+            type: "post",
+            url: "/message",
+            async: false,
+            data: JSON.stringify({command: "request-init-work-tree"}),
+            contentType: "application/json; charset=utf-8",
+            dataType: "json",
+            success: function (data) {
+                if (data.status === "success") {
+                    InitWorkSpaceTree(data.data);
+                }
+            }
+        });
+        document.onkeydown = function (oEvent) {
+            var oEvent = oEvent || window.oEvent;
+            //获取键盘的keyCode值
+            var nKeyCode = oEvent.code;
+            //获取ctrl 键对应的事件属性
+            var bCtrlKeyCode = oEvent.ctrlKey || oEvent.metaKey;
+            if (nKeyCode === "KeyS" && bCtrlKeyCode && current_edit_markdown_info['path']) {
+                oEvent.preventDefault();
+                $.ajax({
+                    type: "post",
+                    url: "/message",
+                    async: true,
+                    data: JSON.stringify({
+                        command: "save_markdown.jstree",
+                        data: {
+                            text: editor.getMarkdown(),
+                            path: current_edit_markdown_info['path']
+                        }
+                    }),
+                    contentType: "application/json; charset=utf-8",
+                    dataType: "json",
+                    success: function (data) {
+                        if (data.status === "success") {
+                        }
+                    }
+                });
+            }
+        }
+    }
+</script>
+</body>
+</html>
