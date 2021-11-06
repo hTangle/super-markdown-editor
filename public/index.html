@@ -13,17 +13,81 @@
     <link rel="stylesheet" href="css/style.css"/>
     <!--    <link rel="stylesheet" href="css/bstreeview.min.css"/>-->
     <script src="js/sidebars.js"></script>
-    <script src="lib/editor.md/editormd.min.js"></script>
+    <script src="lib/editor.md/editormd.js"></script>
     <link rel="stylesheet" href="themes/default/style.min.css"/>
     <script src="js/jstree.js"></script>
     <!-- custom css -->
     <link rel="stylesheet" href="lib/editor.md/css/editormd.css"/>
-    <!--    <script>if (window.module) module = window.module;</script>-->
+    <script src="lib/editor.md/plugins/image-handle-paste/image-handle-paste.js"></script>
 
+    <link rel="stylesheet" href="css/viewer.min.css"/>
+    <link rel="stylesheet" href="js/viewer.min.js"/>
+    <link rel="stylesheet" href="js/viewer.esm.js"/>
+    <script src="js/jquery-viewer.js"></script>
     <style type="text/css">
         html, body {
             margin: 0;
             height: 100%;
+        }
+
+        .modal {
+            display: none; /* Hidden by default */
+            position: fixed; /* Stay in place */
+            z-index: 1000; /* Sit on top */
+            padding-top: 100px; /* Location of the box */
+            left: 0;
+            top: 0;
+            width: 100%; /* Full width */
+            height: 100%; /* Full height */
+            overflow: auto; /* Enable scroll if needed */
+            background-color: rgb(0, 0, 0); /* Fallback color */
+            background-color: rgba(0, 0, 0, 0.9); /* Black w/ opacity */
+        }
+
+        /* Modal Content (Image) */
+        .modal-content {
+            margin: auto;
+            display: block;
+        }
+
+        /* Add Animation - Zoom in the Modal */
+        .modal-content, #caption {
+            animation-name: zoom;
+            animation-duration: 0.6s;
+        }
+
+        @keyframes zoom {
+            from {
+                transform: scale(0)
+            }
+            to {
+                transform: scale(1)
+            }
+        }
+
+        /* The Close Button */
+        .close {
+            position: absolute;
+            top: 15px;
+            right: 35px;
+            color: #f1f1f1;
+            font-size: 40px;
+            font-weight: bold;
+            transition: 0.3s;
+        }
+
+        .close:hover,
+        .close:focus {
+            color: #bbb;
+            text-decoration: none;
+            cursor: pointer;
+        }
+
+        /* 100% Image Width on Smaller Screens */
+        @media only screen and (max-width: 700px) {
+            /*.modal-content {*/
+            /*    width: 100%;*/
+            /*}*/
         }
     </style>
 
@@ -35,20 +99,37 @@
     <div class="row h-100">
         <div class="col-2 w-100">
             <input type="text" class="w-100">
-            <div id="jstree_demo_div" class="w-100"></div>
+            <div id="SuperJSTree" class="w-100"></div>
         </div>
         <div class="col-10 h-100">
             <div id="test-editor">
     <textarea style="display:none;">### 关于 Editor.md
+### 主要特性
 
-**Editor.md** 是一款开源的、可嵌入的 Markdown 在线编辑器（组件），基于 CodeMirror、jQuery 和 Marked 构建。
-    </textarea>
+- 支持“标准”Markdown / CommonMark和Github风格的语法，也可变身为代码编辑器；
+- 支持实时预览、图片（跨域）上传、预格式文本/代码/表格插入、代码折叠、搜索替换、只读模式、自定义样式主题和多语言语法高亮等功能；
+- 支持ToC（Table of Contents）、Emoji表情、Task lists、@链接等Markdown扩展语法；
+- 支持TeX科学公式（基于KaTeX）、流程图 Flowchart 和 时序图 Sequence Diagram;
+- 支持识别和解析HTML标签，并且支持自定义过滤标签解析，具有可靠的安全性和几乎无限的扩展性；
+- 支持 AMD / CMD 模块化加载（支持 Require.js & Sea.js），并且支持自定义扩展插件；
+- 兼容主流的浏览器（IE8+）和Zepto.js，且支持iPad等平板设备；
+- 支持自定义主题样式；
+
+# Editor.md
+
+![](https://pandao.github.io/editor.md/images/logos/editormd-logo-180x180.png)
+
+![](https://img.shields.io/github/stars/pandao/editor.md.svg) ![](https://img.shields.io/github/forks/pandao/editor.md.svg) ![](https://img.shields.io/github/tag/pandao/editor.md.svg) ![](https://img.shields.io/github/release/pandao/editor.md.svg) ![](https://img.shields.io/github/issues/pandao/editor.md.svg) ![](https://img.shields.io/bower/v/editor.md.svg)
+![](ae5390032194a87203aafef01)
+</textarea>
             </div>
         </div>
     </div>
 </div>
 
-
+<div id="myModal" class="modal" onclick="disShowImage()" >
+    <img class="modal-content" id="img01" onmousewheel="return zoomImg(this)" style="width: auto;height: auto;max-width: 100%;max-height: 100%;">
+</div>
 <script>
     var select_node_dev;
     var select_before = "";
@@ -57,7 +138,9 @@
     var select_current_timestamp = 0;
     var global_data;
     var init_flag = false;
+    var imageClicked = false;
     var softwareName = "SuperMarkdownEditor";
+    var imageUploadURL = "/upload/image";
     var editor = editormd("test-editor", {
         width: "100%",
         height: "100%",
@@ -72,13 +155,17 @@
         toolbarIcons: function () {
             return editormd.toolbarModes['full']; // full, simple, mini
         },
+        imageUpload: true,
+        imageFormats: ["jpg", "jpeg", "gif", "png", "bmp", "webp"],
+        imageUploadURL: "/upload/image"
     });
+    editor.imagePaste();
     var current_edit_markdown_info = {};
 
     function InitWorkSpaceTree(workSpaceData) {
         if (init_flag || !workSpaceData) return;
         console.log("start init work space", workSpaceData);
-        $('#jstree_demo_div').on('create_node.jstree', function (e, data) {
+        $('#SuperJSTree').on('create_node.jstree', function (e, data) {
             select_node_dev = data;
             $.ajax({
                 type: "post",
@@ -218,9 +305,9 @@
                         "create_brother": {
                             "label": "BroFolder",
                             "action": function (data) {
-                                $("#jstree_demo_div").jstree(true).create_node('#', {type: "default"}, "last", function (new_node) {
+                                $("#SuperJSTree").jstree(true).create_node('#', {type: "default"}, "last", function (new_node) {
                                     setTimeout(function () {
-                                        $("#jstree_demo_div").jstree(true).edit(new_node);
+                                        $("#SuperJSTree").jstree(true).edit(new_node);
                                     }, 0);
                                 });
                             }
@@ -264,9 +351,32 @@
         init_flag = true;
     }
 
+    var modal = document.getElementById("myModal");
+    var modalImg = document.getElementById("img01");
+    // When the user clicks on <span> (x), close the modal
+    function disShowImage(){
+        modal.style.display = "none";
+    }
+    function zoomImg(obj){
+        // 一开始默认是100%
+        let zoom = parseInt(obj.style.zoom, 10) || 100;
+        // 滚轮滚一下wheelDelta的值增加或减少120
+        zoom += event.wheelDelta/12;
+        if(zoom>0)    {
+            obj.style.zoom = zoom + '%';
+        }
+        return false;
+    }
+
+    function ShowImageFunction(srcUrl) {
+        console.log(srcUrl);
+        modal.style.display = "block";
+        modalImg.style.zoom="reset";
+        modalImg.src = srcUrl;
+        imageClicked = true;
+    }
 
     window.onload = function () {
-
         $.ajax({
             type: "post",
             url: "/message",
@@ -306,8 +416,47 @@
                         }
                     }
                 });
+            } else if (nKeyCode === "Escape" && imageClicked) {
+                imageClicked = false;
+                modal.style.display = "none";
             }
         }
+        // $('#SuperJSTree').on('paste', function (e) {
+        //     console.log("paste function")
+        //     var items = (e.clipboardData || e.originalEvent.clipboardData).items;
+        //     //判断图片类型
+        //     if (items && items[0].type.indexOf('image') > -1) {
+        //         var file = items[0].getAsFile();
+        //         var forms = new FormData(); //Filename
+        //         forms.set("editormd-image-file", file, "file_" + Date.parse(new Date()) + ".png"); // 文件
+        //         $.ajax({
+        //             "type": 'post',
+        //             "cache": false,
+        //             "url": imageUploadURL,
+        //             "data": forms,
+        //             "dateType": "json",
+        //             "processData": false,
+        //             "contentType": false,
+        //             "mimeType": "multipart/form-data",
+        //             success: function (ret) {
+        //                 result = JSON.parse(ret);
+        //                 if (ret.success == 1) {
+        //                     // $("." + classPrefix + "image-dialog").find("input[data-url]").val(ret.url);
+        //                     //cm.replaceSelection("![](" + ret.url  + ")");
+        //                     editor.insertValue("![](" + ret.url + ")");
+        //                 }
+        //                 console.log(ret.message);
+        //             },
+        //             error: function (err) {
+        //                 console.log('请求失败')
+        //             }
+        //         })
+        //     }
+        // })
+
+        // $("#test-editor img").click(function () {
+        //     showImage($(this)[0].src)
+        // })
     }
 </script>
 </body>

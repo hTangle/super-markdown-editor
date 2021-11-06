@@ -2,14 +2,14 @@ const {app, BrowserWindow, Menu, MenuItem} = require('electron')
 const path = require('path')
 const log = require('electron-log');
 const fs = require('fs');
-
+const { v4: uuidv4 } = require('uuid');
 const osenv = require('osenv');
 
 let WorkSpaceDirs = [];
 let mainWindow;
 log.info(process.platform);
 let splitStr = "/";
-if (process.platform == 'win32') {
+if (process.platform === 'win32') {
     splitStr = "\\";
 }
 
@@ -100,9 +100,11 @@ function WriteMarkdownFromFile(pathes, data) {
 
 const express = require('express')
 var bodyParser = require('body-parser');
+var formidable = require('formidable')
 const httpApp = express()
 const port = 3000
 httpApp.use(express.static("public"));
+httpApp.use(express.static(imageSpaceDir));
 httpApp.use(bodyParser.json({limit: '1mb'}));
 httpApp.use(bodyParser.urlencoded({            //此项必须在 bodyParser.json 下面,为参数编码
     extended: true
@@ -110,6 +112,29 @@ httpApp.use(bodyParser.urlencoded({            //此项必须在 bodyParser.json
 httpApp.get('/message', (req, res) => {
     res.send('Hello World!')
 })
+
+httpApp.post("/upload/image", (req, res) => {
+    var form = new formidable.IncomingForm();   //创建上传表单
+    form.keepExtensions = true;     //保留后缀
+    form.maxFieldsSize = 2 * 1024 * 1024;   //文件大小
+    form.uploadDir = imageSpaceDir;     //设置上传目录
+    isSuccess = false;
+    result={
+        "message": "success",
+        "success": 0
+    }
+    form.parse(req, function (err, fields, files) {
+        if (err) {
+            res.locals.error = err;
+            return;
+        }
+        isSuccess = true
+        result["success"]=1
+        result["url"]=files["editormd-image-file"].newFilename;
+        res.send(JSON.stringify(result));
+    });
+})
+
 httpApp.post('/message', (req, res) => {
     log.info(JSON.stringify(req.body));
     result = {

@@ -22,7 +22,9 @@
     "egg": "^2.31.0",
     "electron-log": "^4.4.1",
     "express": "^4.17.1",
+    "formidable": "^2.0.1",
     "fs": "0.0.1-security",
-    "osenv": "^0.1.5"
+    "osenv": "^0.1.5",
+    "uuid": "^8.3.2"
   }
 }
