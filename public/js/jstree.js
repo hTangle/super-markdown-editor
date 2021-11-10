@@ -6190,6 +6190,7 @@
 			this.element
 				.on("init.jstree loading.jstree ready.jstree", function () {
 						this.get_container_ul().addClass('jstree-contextmenu');
+						this.get_container_ul().css('z-index',100);
 					}.bind(this))
 				.on("contextmenu.jstree", ".jstree-anchor", function (e, data) {
 						if (e.target.tagName.toLowerCase() === 'input') {
@@ -6324,6 +6325,7 @@
 				var cls = 'jstree-contextmenu jstree-' + this.get_theme() + '-contextmenu';
 				$(data.element).addClass(cls);
 				a.addClass('jstree-context');
+                $(data.element).css('z-index',100);
 			}.bind(this));
 			this._data.contextmenu.visible = true;
 			$.vakata.context.show(a, { 'x' : x, 'y' : y }, i);

@@ -97,11 +97,11 @@
 <body>
 <div class="container-fluid h-100">
     <div class="row h-100">
-        <div class="col-2 w-100">
+        <div class="col-1 w-100">
             <input type="text" class="w-100">
             <div id="SuperJSTree" class="w-100"></div>
         </div>
-        <div class="col-10 h-100">
+        <div class="col-11 h-100">
             <div id="test-editor">
     <textarea style="display:none;">### 关于 Editor.md
 ### 主要特性
@@ -120,15 +120,15 @@
 ![](https://pandao.github.io/editor.md/images/logos/editormd-logo-180x180.png)
 
 ![](https://img.shields.io/github/stars/pandao/editor.md.svg) ![](https://img.shields.io/github/forks/pandao/editor.md.svg) ![](https://img.shields.io/github/tag/pandao/editor.md.svg) ![](https://img.shields.io/github/release/pandao/editor.md.svg) ![](https://img.shields.io/github/issues/pandao/editor.md.svg) ![](https://img.shields.io/bower/v/editor.md.svg)
-![](ae5390032194a87203aafef01)
-</textarea>
+![](/image/ae5390032194a87203aafef01)</textarea>
             </div>
         </div>
     </div>
 </div>
 
-<div id="myModal" class="modal" onclick="disShowImage()" >
-    <img class="modal-content" id="img01" onmousewheel="return zoomImg(this)" style="width: auto;height: auto;max-width: 100%;max-height: 100%;">
+<div id="myModal" class="modal" onclick="disShowImage()">
+    <img class="modal-content" id="img01" onmousewheel="return zoomImg(this)"
+         style="width: auto;height: auto;max-width: 100%;max-height: 100%;">
 </div>
 <script>
     var select_node_dev;
@@ -136,11 +136,19 @@
     var select_before_timestamp = 0;
     var select_current = "";
     var select_current_timestamp = 0;
+    var open_file_path;
     var global_data;
     var init_flag = false;
     var imageClicked = false;
     var softwareName = "SuperMarkdownEditor";
     var imageUploadURL = "/upload/image";
+    var editorMarkdownStatus = {
+        changed: false,
+        current_file_path: [],
+        path: "",
+        origin_path: [],
+        node: null,
+    }
     var editor = editormd("test-editor", {
         width: "100%",
         height: "100%",
@@ -157,10 +165,12 @@
         },
         imageUpload: true,
         imageFormats: ["jpg", "jpeg", "gif", "png", "bmp", "webp"],
-        imageUploadURL: "/upload/image"
+        imageUploadURL: "/upload/image",
+        onchange: function () {
+            editorMarkdownStatus.changed = true;
+        }
     });
     editor.imagePaste();
-    var current_edit_markdown_info = {};
 
     function InitWorkSpaceTree(workSpaceData) {
         if (init_flag || !workSpaceData) return;
@@ -214,13 +224,38 @@
                 select_current = data.selected[0];
                 select_current_timestamp = $.now();
                 if (select_current === select_before && (select_current_timestamp - select_before_timestamp) < 300) {
-                    //double click
+                    //double click-> when select a file, then open the file in markdown editor
                     select_before = "";
                     select_before_timestamp = select_current_timestamp;
                     global_data = data.instance.get_node(select_current);
                     console.log(data.instance.get_node(select_current));
                     console.log(data.instance.get_path(select_current));
-                    console.log("The selected node is:" + global_data.text, global_data.type)
+                    console.log("The selected node is:" + global_data.text, global_data.type);
+                    open_file_path = data.instance.get_path(data.node);
+                    // before open a new file, should save old file first;
+                    if (editorMarkdownStatus.changed) {
+                        console.log("content changed, should save before open a new file");
+                        $.ajax({
+                            type: "post",
+                            url: "/message",
+                            async: true,
+                            data: JSON.stringify({
+                                command: "save_markdown.jstree",
+                                data: {
+                                    text: editor.getMarkdown(),
+                                    origin_path: $("#SuperJSTree").jstree(true).get_path(editorMarkdownStatus.node)
+                                }
+                            }),
+                            contentType: "application/json; charset=utf-8",
+                            dataType: "json",
+                            success: function (data) {
+                                if (data.status === "success") {
+                                    editorMarkdownStatus.changed = false;
+                                }
+                            }
+                        });
+                    }
+                    editorMarkdownStatus.node = data.node;
                     $.ajax({
                         type: "post",
                         url: "/message",
@@ -235,11 +270,13 @@
                         }),
                         contentType: "application/json; charset=utf-8",
                         dataType: "json",
-                        success: function (data) {
-                            if (data.status === "success" && data.data.read) {
-                                editor.setMarkdown(data.data.text);
-                                current_edit_markdown_info['path'] = data.data.path;
-                                $('title').html(softwareName + "[" + data.data.path + "]");
+                        success: function (d) {
+                            if (d.status === "success" && d.data.read) {
+                                editor.setMarkdown(d.data.text);
+                                editorMarkdownStatus.path = d.data.path;
+                                editorMarkdownStatus.origin_path = data.instance.get_path(data.node);
+                                editorMarkdownStatus.changed = false;
+                                $('title').html(softwareName + "[" + d.data.path + "]");
                             }
                         }
                     })
@@ -353,16 +390,18 @@
 
     var modal = document.getElementById("myModal");
     var modalImg = document.getElementById("img01");
+
     // When the user clicks on <span> (x), close the modal
-    function disShowImage(){
+    function disShowImage() {
         modal.style.display = "none";
     }
-    function zoomImg(obj){
+
+    function zoomImg(obj) {
         // 一开始默认是100%
         let zoom = parseInt(obj.style.zoom, 10) || 100;
         // 滚轮滚一下wheelDelta的值增加或减少120
-        zoom += event.wheelDelta/12;
-        if(zoom>0)    {
+        zoom += event.wheelDelta / 12;
+        if (zoom > 0) {
             obj.style.zoom = zoom + '%';
         }
         return false;
@@ -371,7 +410,7 @@
     function ShowImageFunction(srcUrl) {
         console.log(srcUrl);
         modal.style.display = "block";
-        modalImg.style.zoom="reset";
+        modalImg.style.zoom = "reset";
         modalImg.src = srcUrl;
         imageClicked = true;
     }
@@ -396,67 +435,36 @@
             var nKeyCode = oEvent.code;
             //获取ctrl 键对应的事件属性
             var bCtrlKeyCode = oEvent.ctrlKey || oEvent.metaKey;
-            if (nKeyCode === "KeyS" && bCtrlKeyCode && current_edit_markdown_info['path']) {
+            if (nKeyCode === "KeyS" && bCtrlKeyCode) {
                 oEvent.preventDefault();
-                $.ajax({
-                    type: "post",
-                    url: "/message",
-                    async: true,
-                    data: JSON.stringify({
-                        command: "save_markdown.jstree",
-                        data: {
-                            text: editor.getMarkdown(),
-                            path: current_edit_markdown_info['path']
+                if (editorMarkdownStatus.changed && editorMarkdownStatus.path) {
+                    //only changed file can be saved
+                    $.ajax({
+                        type: "post",
+                        url: "/message",
+                        async: true,
+                        data: JSON.stringify({
+                            command: "save_markdown.jstree",
+                            data: {
+                                text: editor.getMarkdown(),
+                                origin_path: $("#SuperJSTree").jstree(true).get_path(editorMarkdownStatus.node)
+                            }
+                        }),
+                        contentType: "application/json; charset=utf-8",
+                        dataType: "json",
+                        success: function (data) {
+                            if (data.status === "success") {
+                                editorMarkdownStatus.changed = false;
+                            }
                         }
-                    }),
-                    contentType: "application/json; charset=utf-8",
-                    dataType: "json",
-                    success: function (data) {
-                        if (data.status === "success") {
-                        }
-                    }
-                });
+                    });
+                }
+
             } else if (nKeyCode === "Escape" && imageClicked) {
                 imageClicked = false;
                 modal.style.display = "none";
             }
         }
-        // $('#SuperJSTree').on('paste', function (e) {
-        //     console.log("paste function")
-        //     var items = (e.clipboardData || e.originalEvent.clipboardData).items;
-        //     //判断图片类型
-        //     if (items && items[0].type.indexOf('image') > -1) {
-        //         var file = items[0].getAsFile();
-        //         var forms = new FormData(); //Filename
-        //         forms.set("editormd-image-file", file, "file_" + Date.parse(new Date()) + ".png"); // 文件
-        //         $.ajax({
-        //             "type": 'post',
-        //             "cache": false,
-        //             "url": imageUploadURL,
-        //             "data": forms,
-        //             "dateType": "json",
-        //             "processData": false,
-        //             "contentType": false,
-        //             "mimeType": "multipart/form-data",
-        //             success: function (ret) {
-        //                 result = JSON.parse(ret);
-        //                 if (ret.success == 1) {
-        //                     // $("." + classPrefix + "image-dialog").find("input[data-url]").val(ret.url);
-        //                     //cm.replaceSelection("![](" + ret.url  + ")");
-        //                     editor.insertValue("![](" + ret.url + ")");
-        //                 }
-        //                 console.log(ret.message);
-        //             },
-        //             error: function (err) {
-        //                 console.log('请求失败')
-        //             }
-        //         })
-        //     }
-        // })
-
-        // $("#test-editor img").click(function () {
-        //     showImage($(this)[0].src)
-        // })
     }
 </script>
 </body>

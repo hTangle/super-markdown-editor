@@ -2,8 +2,9 @@ const {app, BrowserWindow, Menu, MenuItem} = require('electron')
 const path = require('path')
 const log = require('electron-log');
 const fs = require('fs');
-const { v4: uuidv4 } = require('uuid');
+const {v4: uuidv4} = require('uuid');
 const osenv = require('osenv');
+const BaseImage = require('./libs/base_image');
 
 let WorkSpaceDirs = [];
 let mainWindow;
@@ -22,8 +23,12 @@ function getFilesInFolder(folderPath, cb) {
     fs.readdir(folderPath, cb);
 }
 
-const workspaceDir = path.join(getUsersHomeFolder(), "super-markdown-editor")
-const imageSpaceDir = path.join(getUsersHomeFolder(), "super-markdown-editor", ".image")
+const workSpaceName = "super-markdown-editor";
+const workSpaceConfLocalName = ".conf_local";
+const workspaceDir = path.join(getUsersHomeFolder(), workSpaceName);
+const workConfLocal = path.join(getUsersHomeFolder(), workSpaceName, workSpaceConfLocalName);
+const imageSpaceDir = path.join(getUsersHomeFolder(), "super-markdown-editor", "image");
+let baseImageConf = new BaseImage(imageSpaceDir, workConfLocal, splitStr);
 
 function ReadAllDirAndFile(parent_path) {
     var allDirs = [];
@@ -34,7 +39,7 @@ function ReadAllDirAndFile(parent_path) {
         subObj = fs.statSync(sub_path);
         if (subObj.isFile() && name.endsWith(".md")) {
             allDirs.push({"type": "file", "text": name.replace(".md", "")})
-        } else if (subObj.isDirectory() && !name.startsWith(".image")) {
+        } else if (subObj.isDirectory() && !name.startsWith("image") && !name.startsWith(workSpaceConfLocalName)) {
             var childAllDirs = ReadAllDirAndFile(sub_path);
             if (childAllDirs.length > 0) {
                 allDirs.push({"type": "default", "text": name, 'children': childAllDirs});
@@ -88,10 +93,12 @@ function ReadMarkdownFromFile(pathes) {
     return tmpData
 }
 
-function WriteMarkdownFromFile(pathes, data) {
+function WriteMarkdownFromFile(origin_path, data) {
+    pathes = origin_path.join(splitStr) + ".md";
     sub_path = getWorkDirFullPath(pathes)
     fs.writeFile(sub_path, data, {encoding: 'utf8'}, (err) => {
         if (err) throw err;
+        baseImageConf.checkImageShouldDelete(data, origin_path);
         console.log('The file has been saved!');
     });
     return tmpData
@@ -104,8 +111,8 @@ var formidable = require('formidable')
 const httpApp = express()
 const port = 3000
 httpApp.use(express.static("public"));
-httpApp.use(express.static(imageSpaceDir));
-httpApp.use(bodyParser.json({limit: '1mb'}));
+httpApp.use('/image', express.static(imageSpaceDir));
+httpApp.use(bodyParser.json({limit: '10mb'}));
 httpApp.use(bodyParser.urlencoded({            //此项必须在 bodyParser.json 下面,为参数编码
     extended: true
 }))
@@ -119,7 +126,7 @@ httpApp.post("/upload/image", (req, res) => {
     form.maxFieldsSize = 2 * 1024 * 1024;   //文件大小
     form.uploadDir = imageSpaceDir;     //设置上传目录
     isSuccess = false;
-    result={
+    result = {
         "message": "success",
         "success": 0
     }
@@ -128,9 +135,13 @@ httpApp.post("/upload/image", (req, res) => {
             res.locals.error = err;
             return;
         }
+
         isSuccess = true
-        result["success"]=1
-        result["url"]=files["editormd-image-file"].newFilename;
+        result["success"] = 1
+        result["url"] = "/image/" + files["editormd-image-file"].newFilename;
+        if (fields["open_file_path"]) {
+            baseImageConf.saveImage(files["editormd-image-file"].newFilename, JSON.parse(fields["open_file_path"]));
+        }
         res.send(JSON.stringify(result));
     });
 })
@@ -160,8 +171,10 @@ httpApp.post('/message', (req, res) => {
             break
         case 'rename_node.jstree':
             log.info("rename_node.jstree")
+            // TODO: rename should change image save info
             if (req.body.data.type === "default") {
                 RenameDir(req.body.data.path, req.body.data.old)
+
             } else {
                 RenameFile(req.body.data.path, req.body.data.old)
             }
@@ -175,12 +188,12 @@ httpApp.post('/message', (req, res) => {
                     "read": true,
                     "path": req.body.data.path.join(splitStr)
                 }
-            }//save_markdown.jstree
+            }
             break
         case 'save_markdown.jstree':
             log.info("save_markdown.jstree")
-            if (req.body.data.path) {
-                WriteMarkdownFromFile(req.body.data.path, req.body.data.text);
+            if (req.body.data.origin_path) {
+                WriteMarkdownFromFile(req.body.data.origin_path, req.body.data.text);
             }
             break
 
