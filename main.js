@@ -5,6 +5,7 @@ const fs = require('fs');
 const {v4: uuidv4} = require('uuid');
 const osenv = require('osenv');
 const BaseImage = require('./libs/base_image');
+const BaseSync = require('./libs/base_sync');
 
 let WorkSpaceDirs = [];
 let mainWindow;
@@ -25,10 +26,13 @@ function getFilesInFolder(folderPath, cb) {
 
 const workSpaceName = "super-markdown-editor";
 const workSpaceConfLocalName = ".conf_local";
+const workSpaceConfGlobalName = ".conf_global";
 const workspaceDir = path.join(getUsersHomeFolder(), workSpaceName);
 const workConfLocal = path.join(getUsersHomeFolder(), workSpaceName, workSpaceConfLocalName);
+const workConfGlobal = path.join(getUsersHomeFolder(), workSpaceName, workSpaceConfGlobalName);
 const imageSpaceDir = path.join(getUsersHomeFolder(), "super-markdown-editor", "image");
 let baseImageConf = new BaseImage(imageSpaceDir, workConfLocal, splitStr);
+let baseSyncConf = new BaseSync(workConfLocal, workConfGlobal, splitStr);
 
 function ReadAllDirAndFile(parent_path) {
     var allDirs = [];
@@ -174,7 +178,6 @@ httpApp.post('/message', (req, res) => {
             // TODO: rename should change image save info
             if (req.body.data.type === "default") {
                 RenameDir(req.body.data.path, req.body.data.old)
-
             } else {
                 RenameFile(req.body.data.path, req.body.data.old)
             }

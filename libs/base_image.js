@@ -28,65 +28,32 @@ class BaseImage {
         if (!paths) {
             return false
         }
-        let key = "";
-        let index = 0;
-        if (paths.length === 2) {
-            key = paths[0];
-            index = 1;
-        } else if (paths.length > 2) {
-            key = paths[0] + "##" + paths[1];
-            index = 2;
-        } else {
-            return false;
-        }
-        if (this.readConfigFromFile(key)) {
-            let ck = paths.slice(index).join("##");
-            let shouldSave = false;
-            if (ck in this.full_info[key]) {
-                for (var k in this.full_info[key][ck]) {
+        let full_path = this.config_base_path + this.split_str + paths.join(this.split_str)
+        if (fs.existsSync(full_path)) {
+            log.debug("image conf dir exists:", full_path);
+            let tmpData = fs.readFileSync(full_path, {encoding: 'utf8', flag: 'r'});
+            if (tmpData) {
+                let cnf = JSON.parse(tmpData);
+                let changed = false;
+                for (let k in cnf) {
                     if (!content.includes("![](/image/" + k + ")")) {
                         log.debug("![](/image/" + k + ") should be deleted");
-                        this.full_info[key][ck][k] = 0;
-                        shouldSave = true;
+                        cnf[k] = 0;
+                        changed = true;
                     }
                 }
+                if (changed) {
+                    fs.writeFile(full_path, JSON.stringify(cnf), {encoding: 'utf8'}, (err) => {
+                        if (err) throw err;
+                        console.log('The file has been saved!', full_path);
+                    })
+                }
             }
-            if (shouldSave) {
-                log.debug("try to sync [" + key + "] to disk");
-                this.syncConfigToDisk(key);
-            }
+            return true
         } else {
-            return false;
+            log.debug("image conf dir not exists:", full_path);
+            return false
         }
-    }
-
-    readConfigFromFile(config_key) {
-        if (!(config_key in this.full_info)) {
-            let config_key_full_path = this.config_base_path + this.split_str + config_key + ".json";
-            log.debug("config full path", config_key_full_path);
-            if (!fs.existsSync(config_key_full_path)) {
-                log.debug("create config file of", config_key_full_path);
-                fs.writeFileSync(config_key_full_path, JSON.stringify({}), {encoding: 'utf8'});
-                this.full_info[config_key] = {};
-                return true
-            }
-            // path should exist, or some error should happened before
-            let tmpData = fs.readFileSync(config_key_full_path, {encoding: 'utf8', flag: 'r'})
-            if (tmpData) {
-                this.full_info[config_key] = JSON.parse(tmpData);
-            } else {
-                this.full_info[config_key] = {};
-            }
-        }
-        log.debug("[" + config_key + "] already in mem");
-        return true;
-    }
-
-    syncConfigToDisk(config_key) {
-        fs.writeFile(this.config_base_path + this.split_str + config_key + ".json", JSON.stringify(this.full_info[config_key]), {encoding: 'utf8'}, (err) => {
-            if (err) throw err;
-            console.log('The file has been saved!', config_key);
-        });
     }
 
     /**
@@ -100,26 +67,31 @@ class BaseImage {
         if (!paths) {
             return false
         }
-        let key = "";
-        let index = 0;
-        if (paths.length === 2) {
-            key = paths[0];
-            index = 1;
-        } else if (paths.length > 2) {
-            key = paths[0] + "##" + paths[1];
-            index = 2;
-        } else {
-            return false;
-        }
-        if (this.readConfigFromFile(key)) {
-            let ck = paths.slice(index).join("##");
-            if (!(ck in this.full_info[key])) {
-                this.full_info[key][ck] = {}
+        let full_path = this.config_base_path + this.split_str + paths.join(this.split_str)
+        if (fs.existsSync(full_path)) {
+            log.debug("image conf dir exists:", full_path);
+            let tmpData = fs.readFileSync(full_path, {encoding: 'utf8', flag: 'r'});
+            if (tmpData) {
+                let cnf = JSON.parse(tmpData);
+                cnf[imageName] = 1;
+                fs.writeFile(full_path, JSON.stringify(cnf), {encoding: 'utf8'}, (err) => {
+                    if (err) throw err;
+                    console.log('The file has been saved!', full_path);
+                })
             }
-            this.full_info[key][ck][imageName] = 1;
-            this.syncConfigToDisk(key);
         } else {
-            return false;
+            log.debug("image conf dir not exists:", full_path," try to create a new one");
+            if (paths.length > 1) {
+                let dir_path = this.config_base_path + this.split_str + paths.slice(0, paths.length - 1).join(this.split_str);
+                if (!fs.existsSync(dir_path)) {
+                    fs.mkdirSync(dir_path, {recursive: true})
+                }
+            }
+            fs.writeFile(full_path, JSON.stringify({[imageName]: 1}), {encoding: 'utf8'}, (err) => {
+                if (err) throw err;
+                console.log('The file has been saved!', full_path);
+            });
+
         }
     }
 }
