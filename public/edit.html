@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <title>SuperMarkdownEditor</title>
+    <link href="css/bootstrap.min.css" rel="stylesheet">
+    <link href="css/font-awesome.min.css" rel="stylesheet">
+    <script src="js/jquery.min.js"></script>
+    <script src="js/bootstrap.bundle.min.js"></script>
+    <!--    <script src="js/bstreeview.js"></script>-->
+    <link rel="stylesheet" href="css/sidebars.css"/>
+    <link rel="stylesheet" href="css/style.css"/>
+    <!--    <link rel="stylesheet" href="css/bstreeview.min.css"/>-->
+    <script src="js/sidebars.js"></script>
+    <script src="lib/editor.md/editormd.js"></script>
+    <link rel="stylesheet" href="themes/default/style.min.css"/>
+    <script src="js/jstree.js"></script>
+    <!-- custom css -->
+    <link rel="stylesheet" href="lib/editor.md/css/editormd.css"/>
+    <script src="lib/editor.md/plugins/image-handle-paste/image-handle-paste.js"></script>
+
+    <link rel="stylesheet" href="css/viewer.min.css"/>
+    <link rel="stylesheet" href="js/viewer.min.js"/>
+    <link rel="stylesheet" href="js/viewer.esm.js"/>
+    <script src="js/jquery-viewer.js"></script>
+    <style type="text/css">
+        html, body {
+            margin: 0;
+            height: 100%;
+        }
+
+        .modal {
+            display: none; /* Hidden by default */
+            position: fixed; /* Stay in place */
+            z-index: 1000; /* Sit on top */
+            padding-top: 100px; /* Location of the box */
+            left: 0;
+            top: 0;
+            width: 100%; /* Full width */
+            height: 100%; /* Full height */
+            overflow: auto; /* Enable scroll if needed */
+            background-color: rgb(0, 0, 0); /* Fallback color */
+            background-color: rgba(0, 0, 0, 0.9); /* Black w/ opacity */
+        }
+
+        /* Modal Content (Image) */
+        .modal-content {
+            margin: auto;
+            display: block;
+        }
+
+        /* Add Animation - Zoom in the Modal */
+        .modal-content, #caption {
+            animation-name: zoom;
+            animation-duration: 0.6s;
+        }
+
+        @keyframes zoom {
+            from {
+                transform: scale(0)
+            }
+            to {
+                transform: scale(1)
+            }
+        }
+
+        /* The Close Button */
+        .close {
+            position: absolute;
+            top: 15px;
+            right: 35px;
+            color: #f1f1f1;
+            font-size: 40px;
+            font-weight: bold;
+            transition: 0.3s;
+        }
+
+        .close:hover,
+        .close:focus {
+            color: #bbb;
+            text-decoration: none;
+            cursor: pointer;
+        }
+
+        /* 100% Image Width on Smaller Screens */
+        @media only screen and (max-width: 700px) {
+            /*.modal-content {*/
+            /*    width: 100%;*/
+            /*}*/
+        }
+    </style>
+
+
+</head>
+
+<body>
+<div class="container-fluid h-100">
+    <div id="test-editor">
+        <textarea style="display:none;"></textarea>
+    </div>
+</div>
+
+<div id="myModal" class="modal" onclick="disShowImage()">
+    <img class="modal-content" id="img01" onmousewheel="return zoomImg(this)"
+         style="width: auto;height: auto;max-width: 100%;max-height: 100%;">
+</div>
+<script>
+    var select_node_dev;
+    var select_before = "";
+    var select_before_timestamp = 0;
+    var select_current = "";
+    var select_current_timestamp = 0;
+    var open_file_path;
+    var global_data;
+    var init_flag = false;
+    var imageClicked = false;
+    var softwareName = "SuperMarkdownEditor";
+    var imageUploadURL = "/upload/image";
+    var editorMarkdownStatus = {
+        changed: false,
+        current_file_path: [],
+        path: "",
+        origin_path: [],
+        node: null,
+    }
+    var editor = editormd("test-editor", {
+        width: "100%",
+        height: "100%",
+        path: "lib/editor.md/lib/",
+        syncScrolling: "single",
+        emoji: true,
+        taskList: true,
+        tocm: true,         // Using [TOCM]
+        tex: true,
+        flowChart: true,
+        sequenceDiagram: true,
+        toolbarIcons: function () {
+            return editormd.toolbarModes['full']; // full, simple, mini
+        },
+        imageUpload: true,
+        imageFormats: ["jpg", "jpeg", "gif", "png", "bmp", "webp"],
+        imageUploadURL: "/upload/image",
+        onchange: function () {
+            editorMarkdownStatus.changed = true;
+        }
+    });
+    editor.imagePaste();
+
+    var modal = document.getElementById("myModal");
+    var modalImg = document.getElementById("img01");
+
+    // When the user clicks on <span> (x), close the modal
+    function disShowImage() {
+        modal.style.display = "none";
+    }
+
+    function zoomImg(obj) {
+        // 一开始默认是100%
+        let zoom = parseInt(obj.style.zoom, 10) || 100;
+        // 滚轮滚一下wheelDelta的值增加或减少120
+        zoom += event.wheelDelta / 12;
+        if (zoom > 0) {
+            obj.style.zoom = zoom + '%';
+        }
+        return false;
+    }
+
+    function ShowImageFunction(srcUrl) {
+        console.log(srcUrl);
+        modal.style.display = "block";
+        modalImg.style.zoom = "reset";
+        modalImg.src = srcUrl;
+        imageClicked = true;
+    }
+
+    window.onload = function () {
+        $.ajax({
+            type: "post",
+            url: "/message",
+            async: false,
+            data: JSON.stringify({command: "request-init-work-tree"}),
+            contentType: "application/json; charset=utf-8",
+            dataType: "json",
+            success: function (data) {
+                if (data.status === "success") {
+                    InitWorkSpaceTree(data.data);
+                }
+            }
+        });
+        document.onkeydown = function (oEvent) {
+            var oEvent = oEvent || window.oEvent;
+            //获取键盘的keyCode值
+            var nKeyCode = oEvent.code;
+            //获取ctrl 键对应的事件属性
+            var bCtrlKeyCode = oEvent.ctrlKey || oEvent.metaKey;
+            if (nKeyCode === "KeyS" && bCtrlKeyCode) {
+                oEvent.preventDefault();
+                if (editorMarkdownStatus.changed && editorMarkdownStatus.path) {
+                    //only changed file can be saved
+                    $.ajax({
+                        type: "post",
+                        url: "/message",
+                        async: true,
+                        data: JSON.stringify({
+                            command: "save_markdown.jstree",
+                            data: {
+                                text: editor.getMarkdown(),
+                                origin_path: $("#SuperJSTree").jstree(true).get_path(editorMarkdownStatus.node)
+                            }
+                        }),
+                        contentType: "application/json; charset=utf-8",
+                        dataType: "json",
+                        success: function (data) {
+                            if (data.status === "success") {
+                                editorMarkdownStatus.changed = false;
+                            }
+                        }
+                    });
+                }
+
+            } else if (nKeyCode === "Escape" && imageClicked) {
+                imageClicked = false;
+                modal.style.display = "none";
+            }
+        }
+    }
+</script>
+</body>
+</html>

@@ -32,7 +32,106 @@ let baseImageConf = new BaseImage(imageSpaceDir, workConfLocal, splitStr);
 let baseSyncConf = new BaseSync(workConfLocal, workConfGlobal, splitStr);
 let baseAppConf = new BaseConfig(workConfLocal, workConfGlobal, splitStr);
 let baseFileHandler = new BaseFileHandler(workSpaceName, workSpaceConfLocalName, workSpaceConfGlobalName, splitStr, baseAppConf, baseImageConf);
-let baseHttpServer = new BaseHttpServer(imageSpaceDir, splitStr, baseImageConf, baseAppConf, baseFileHandler);
+
+const express = require('express')
+const bodyParser = require('body-parser');
+const formidable = require('formidable')
+const httpApp = express()
+const port = 3000
+httpApp.use(express.static("public"));
+httpApp.use('/image', express.static(imageSpaceDir));
+httpApp.use(bodyParser.json({limit: '10mb'}));
+httpApp.use(bodyParser.urlencoded({            //此项必须在 bodyParser.json 下面,为参数编码
+    extended: true
+}))
+httpApp.get('/message', (req, res) => {
+    res.send('Hello World!')
+})
+
+httpApp.post("/upload/image", (req, res) => {
+    let form = new formidable.IncomingForm();   //创建上传表单
+    form.keepExtensions = true;     //保留后缀
+    form.maxFieldsSize = 2 * 1024 * 1024;   //文件大小
+    form.uploadDir = imageSpaceDir;     //设置上传目录
+    let isSuccess = false;
+    let result = {
+        "message": "success",
+        "success": 0
+    }
+    form.parse(req, function (err, fields, files) {
+        if (err) {
+            res.locals.error = err;
+            return;
+        }
+
+        isSuccess = true
+        result["success"] = 1
+        result["url"] = "/image/" + files["editormd-image-file"].newFilename;
+        if (fields["open_file_path"]) {
+            baseImageConf.saveImage(files["editormd-image-file"].newFilename, JSON.parse(fields["open_file_path"]));
+        }
+        res.send(JSON.stringify(result));
+    });
+})
+
+httpApp.post('/message', (req, res) => {
+    log.info(JSON.stringify(req.body));
+    let result = {
+        "status": "success",
+        "command": req.body.command
+    }
+    switch (req.body.command) {
+        case 'request-init-work-tree':
+            WorkSpaceDirs=baseFileHandler.GetOrCreateUserWorkSpace();
+            result["data"] = WorkSpaceDirs;
+            break
+        case 'create_node.jstree':
+            log.info("create_node.jstree")
+            if (req.body.data.type === "default") {
+                result["data"] = {
+                    "created": baseFileHandler.CreateDir(req.body.data.path)
+                }
+            } else {
+                result["data"] = {
+                    "created": baseFileHandler.CreateFile(req.body.data.path)
+                }
+            }
+            break
+        case 'rename_node.jstree':
+            log.info("rename_node.jstree")
+            // TODO: rename should change image save info
+            if (req.body.data.type === "default") {
+                baseFileHandler.RenameDir(req.body.data.path, req.body.data.old)
+            } else {
+                baseFileHandler.RenameFile(req.body.data.path, req.body.data.old)
+            }
+
+            break
+        case 'open.jstree':
+            log.info("open.jstree")
+            if (req.body.data.type === "file") {
+                result["data"] = {
+                    "text": baseFileHandler.ReadMarkdownFromFile(req.body.data.path),
+                    "read": true,
+                    "path": req.body.data.path.join(splitStr)
+                }
+            }
+            break
+        case 'save_markdown.jstree':
+            log.info("save_markdown.jstree")
+            if (req.body.data.origin_path) {
+                baseFileHandler.WriteMarkdownFromFile(req.body.data.origin_path, req.body.data.text);
+            }
+            break
+
+    }
+    res.send(JSON.stringify(result));
+})
+
+const httpServer = httpApp.listen(port, () => {
+    log.info(`Example app listening at http://localhost:${port}`)
+})
+
 
 function createWindow() {
     // 创建浏览器窗口
@@ -70,7 +169,7 @@ app.on('window-all-closed', function () {
     if (process.platform !== 'darwin') {
         app.quit()
     }
-    baseHttpServer.http_server.close((err) => {
+    httpServer.close((err) => {
         log.info('server closed')
         process.exit(err ? 1 : 0)
     })
