@@ -118,7 +118,9 @@
         return false;
     }
 
-    console.log("need to open:", getQueryVariable("path"))
+    let article_id = getQueryVariable("id");
+    let edit_id = getQueryVariable("edit");
+    console.log("need to open:", article_id);
 
     var select_node_dev;
     var select_before = "";
@@ -193,12 +195,22 @@
             type: "post",
             url: "/message",
             async: false,
-            data: JSON.stringify({command: "request-init-work-tree"}),
+            data: JSON.stringify({
+                command: "open.jstree",
+                data: {
+                    id: article_id,
+                    path: "",
+                    type: "file"
+                }
+            }),
             contentType: "application/json; charset=utf-8",
             dataType: "json",
-            success: function (data) {
-                if (data.status === "success") {
-                    InitWorkSpaceTree(data.data);
+            success: function (d) {
+                if (d.status === "success") {
+                    console.log(d.data);
+                    editor.setMarkdown(d.data.text);
+                    editorMarkdownStatus.changed = false;
+                    $('title').html(softwareName + "[" + d.data.name + "]");
                 }
             }
         });
@@ -210,7 +222,7 @@
             var bCtrlKeyCode = oEvent.ctrlKey || oEvent.metaKey;
             if (nKeyCode === "KeyS" && bCtrlKeyCode) {
                 oEvent.preventDefault();
-                if (editorMarkdownStatus.changed && editorMarkdownStatus.path) {
+                if (editorMarkdownStatus.changed) {
                     //only changed file can be saved
                     $.ajax({
                         type: "post",
@@ -220,7 +232,8 @@
                             command: "save_markdown.jstree",
                             data: {
                                 text: editor.getMarkdown(),
-                                origin_path: $("#SuperJSTree").jstree(true).get_path(editorMarkdownStatus.node)
+                                id: article_id,
+                                edit_id: edit_id
                             }
                         }),
                         contentType: "application/json; charset=utf-8",

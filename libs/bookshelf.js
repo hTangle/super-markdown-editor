@@ -158,6 +158,10 @@ class Bookshelf {
         return fs.readFileSync(this.getIdContentPath(id), {encoding: 'utf8', flag: 'r'})
     }
 
+    getShowName(id) {
+        return this.id_info[id].show_name;
+    }
+
     writeNote(id, content) {
         // TODO: mark file changed
         fs.writeFile(this.getIdContentPath(id), content, {encoding: 'utf8'}, (err) => {

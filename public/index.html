@@ -142,6 +142,7 @@
         origin_path: [],
         node: null,
     }
+
     function uuid_generate() {
         var s = [];
         var hexDigits = "0123456789abcdef";
@@ -290,10 +291,10 @@
                         success: function (d) {
                             if (d.status === "success" && d.data.read) {
                                 editor.setMarkdown(d.data.text);
-                                editorMarkdownStatus.path = d.data.path;
-                                editorMarkdownStatus.origin_path = data.instance.get_path(data.node);
+                                // editorMarkdownStatus.path = d.data.path;
+                                // editorMarkdownStatus.origin_path = data.instance.get_path(data.node);
                                 editorMarkdownStatus.changed = false;
-                                $('title').html(softwareName + "[" + d.data.path + "]");
+                                $('title').html(softwareName + "[" + d.data.name + "]");
                             }
                         }
                     })
@@ -335,7 +336,10 @@
                             "action": function (data) {
                                 let inst = $.jstree.reference(data.reference);
                                 let obj = inst.get_node(data.reference);
-                                inst.create_node(obj, {type: "default",id:uuid_generate()}, "last", function (new_node) {
+                                inst.create_node(obj, {
+                                    type: "default",
+                                    id: uuid_generate()
+                                }, "last", function (new_node) {
                                     setTimeout(function () {
                                         inst.edit(new_node);
                                     }, 0);
@@ -348,7 +352,7 @@
                                 let inst = $.jstree.reference(data.reference);
                                 console.log(inst.get_node(data.reference));
                                 let obj = inst.get_node(data.reference);
-                                inst.create_node(obj, {type: "file",id:uuid_generate()}, "last", function (new_node) {
+                                inst.create_node(obj, {type: "file", id: uuid_generate()}, "last", function (new_node) {
                                     setTimeout(function () {
                                         inst.edit(new_node);
                                     }, 0);
@@ -358,7 +362,10 @@
                         "create_brother": {
                             "label": "BroFolder",
                             "action": function (data) {
-                                $("#SuperJSTree").jstree(true).create_node('#', {type: "default",id:uuid_generate()}, "last", function (new_node) {
+                                $("#SuperJSTree").jstree(true).create_node('#', {
+                                    type: "default",
+                                    id: uuid_generate()
+                                }, "last", function (new_node) {
                                     setTimeout(function () {
                                         $("#SuperJSTree").jstree(true).edit(new_node);
                                     }, 0);
@@ -373,9 +380,22 @@
                             "separator_after": false,
                             "label": "Open",
                             "action": function (data) {
-                                let inst = $.jstree.reference(data.reference);//
-                                let obj = inst.get_node(data.reference);
-                                console.log("nodes:", JSON.stringify($("#SuperJSTree").jstree(true).get_path(obj)));// 需要根据path换一个id
+                                console.log("nodes:", select_current);// 需要根据path换一个id
+                                $.ajax({
+                                    type: "post",
+                                    url: "/message",
+                                    async: true,
+                                    data: JSON.stringify({
+                                        command: "open_new_windows.jstree",
+                                        data: {
+                                            id: select_current,
+                                        }
+                                    }),
+                                    contentType: "application/json; charset=utf-8",
+                                    dataType: "json",
+                                    success: function (data) {
+                                    }
+                                });
                             }
                         }
                     } else if (node.parent !== '#') {

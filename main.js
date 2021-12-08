@@ -38,8 +38,11 @@ let bookshelf = new Bookshelf(workspaceDir);
 const express = require('express')
 const bodyParser = require('body-parser');
 const formidable = require('formidable')
-const httpApp = express()
-const port = 3000
+const httpApp = express();
+const port = 3000;
+const editAccess = {};
+const editWindows = {};
+
 httpApp.use(express.static("public"));
 httpApp.use('/image', express.static(imageSpaceDir));
 httpApp.use(bodyParser.json({limit: '10mb'}));
@@ -120,16 +123,30 @@ httpApp.post('/message', (req, res) => {
                     // "text": baseFileHandler.ReadMarkdownFromFile(req.body.data.path),
                     "text": bookshelf.readNote(req.body.data.id),
                     "read": true,
-                    "path": req.body.data.path.join(splitStr)
+                    "name": bookshelf.getShowName(req.body.data.id)
                 }
             }
             break
         case 'save_markdown.jstree':
             log.info("save_markdown.jstree")
-            if (req.body.data.origin_path) {
-                // baseFileHandler.WriteMarkdownFromFile(req.body.data.origin_path, req.body.data.text);
-                bookshelf.writeNote(req.body.data.id, req.body.data.text);
+            if (req.body.data.id) {
+                if (!editAccess.hasOwnProperty(req.body.data.id) || (req.body.data.hasOwnProperty("edit_id")) && req.body.data.edit_id === editAccess[req.body.data.id]) {
+                    bookshelf.writeNote(req.body.data.id, req.body.data.text);
+                } else {
+                    result.status = "failed"
+                    result.reason = "file edit in new open windows, so current editor cannot save this change"
+                }
             }
+            break
+        case 'open_new_windows.jstree':
+            if (editAccess.hasOwnProperty(req.body.data.id) && editWindows.hasOwnProperty(req.body.data.id)) {
+                result.status = "failed"
+                result.reason = "file edit in one open windows, so current editor cannot open new windows to edit";
+                editWindows[req.body.data.id].show();
+            } else {
+                createEditWindow(req.body.data.id);
+            }
+
             break
 
     }
@@ -140,6 +157,27 @@ const httpServer = httpApp.listen(port, () => {
     log.info(`Example app listening at http://localhost:${port}`)
 })
 
+function createEditWindow(id) {
+    let editWindow = new BrowserWindow({
+        width: 1800,
+        height: 900,
+        webPreferences: {
+            nodeIntegration: false,
+        }
+    });
+    let editWinId = uuidv4();
+    log.debug("edit win id:", editWinId, "markdown id:", id);
+    editWindow.loadURL('http://127.0.0.1:3000/edit.html?id=' + id + "&edit=" + editWinId);
+    editWindow.webContents.openDevTools()
+    editWindow.on('closed', () => {
+        delete editAccess[id];
+        delete editWindows[id];
+        log.debug(editWinId, "closed, editAccess=", JSON.stringify(editAccess));
+        editWindow = null;
+    });
+    editAccess[id] = editWinId;
+    editWindows[id] = editWindow;
+}
 
 function createWindow() {
     // 创建浏览器窗口
