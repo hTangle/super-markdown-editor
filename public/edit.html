@@ -106,6 +106,20 @@
          style="width: auto;height: auto;max-width: 100%;max-height: 100%;">
 </div>
 <script>
+    function getQueryVariable(variable) {
+        let query = window.location.search.substring(1);
+        let vars = query.split("&");
+        for (let i = 0; i < vars.length; i++) {
+            let pair = vars[i].split("=");
+            if (pair[0] === variable) {
+                return pair[1];
+            }
+        }
+        return false;
+    }
+
+    console.log("need to open:", getQueryVariable("path"))
+
     var select_node_dev;
     var select_before = "";
     var select_before_timestamp = 0;

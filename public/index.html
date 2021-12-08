@@ -105,7 +105,6 @@
             <div id="test-editor">
     <textarea style="display:none;">### 关于 Editor.md
 ### 主要特性
-
 - 支持“标准”Markdown / CommonMark和Github风格的语法，也可变身为代码编辑器；
 - 支持实时预览、图片（跨域）上传、预格式文本/代码/表格插入、代码折叠、搜索替换、只读模式、自定义样式主题和多语言语法高亮等功能；
 - 支持ToC（Table of Contents）、Emoji表情、Task lists、@链接等Markdown扩展语法；
@@ -114,13 +113,7 @@
 - 支持 AMD / CMD 模块化加载（支持 Require.js & Sea.js），并且支持自定义扩展插件；
 - 兼容主流的浏览器（IE8+）和Zepto.js，且支持iPad等平板设备；
 - 支持自定义主题样式；
-
-# Editor.md
-
-![](https://pandao.github.io/editor.md/images/logos/editormd-logo-180x180.png)
-
-![](https://img.shields.io/github/stars/pandao/editor.md.svg) ![](https://img.shields.io/github/forks/pandao/editor.md.svg) ![](https://img.shields.io/github/tag/pandao/editor.md.svg) ![](https://img.shields.io/github/release/pandao/editor.md.svg) ![](https://img.shields.io/github/issues/pandao/editor.md.svg) ![](https://img.shields.io/bower/v/editor.md.svg)
-![](/image/ae5390032194a87203aafef01)</textarea>
+    </textarea>
             </div>
         </div>
     </div>
@@ -149,6 +142,20 @@
         origin_path: [],
         node: null,
     }
+    function uuid_generate() {
+        var s = [];
+        var hexDigits = "0123456789abcdef";
+        for (var i = 0; i < 36; i++) {
+            s[i] = hexDigits.substr(Math.floor(Math.random() * 0x10), 1);
+        }
+        s[14] = "4"; // bits 12-15 of the time_hi_and_version field to 0010
+        s[19] = hexDigits.substr((s[19] & 0x3) | 0x8, 1); // bits 6-7 of the clock_seq_hi_and_reserved to 01
+        s[8] = s[13] = s[18] = s[23] = "-";
+
+        var uuid = s.join("");
+        return uuid;
+    }
+
     var editor = editormd("test-editor", {
         width: "100%",
         height: "100%",
@@ -170,6 +177,8 @@
             editorMarkdownStatus.changed = true;
         }
     });
+
+    var temp_select_node;
     editor.imagePaste();
 
     function InitWorkSpaceTree(workSpaceData) {
@@ -186,6 +195,8 @@
                     data: {
                         type: data.node.type,
                         text: data.node.text,
+                        id: data.node.id,
+                        parent_id: data.node.parent,
                         path: data.instance.get_path(data.node)
                     }
                 }),
@@ -208,6 +219,8 @@
                     data: {
                         type: data.node.type,
                         text: data.node.text,
+                        id: data.node.id,
+                        parent_id: data.node.parent,
                         path: data.instance.get_path(data.node),
                         old: data.old
                     }
@@ -230,7 +243,7 @@
                     global_data = data.instance.get_node(select_current);
                     console.log(data.instance.get_node(select_current));
                     console.log(data.instance.get_path(select_current));
-                    console.log("The selected node is:" + global_data.text, global_data.type);
+                    console.log("The selected node is:" + global_data.text, global_data.type, global_data.id, global_data.parent);
                     open_file_path = data.instance.get_path(data.node);
                     // before open a new file, should save old file first;
                     if (editorMarkdownStatus.changed) {
@@ -243,7 +256,9 @@
                                 command: "save_markdown.jstree",
                                 data: {
                                     text: editor.getMarkdown(),
-                                    origin_path: $("#SuperJSTree").jstree(true).get_path(editorMarkdownStatus.node)
+                                    origin_path: $("#SuperJSTree").jstree(true).get_path(editorMarkdownStatus.node),
+                                    id: editorMarkdownStatus.node.id,
+                                    parent_id: editorMarkdownStatus.node.parent
                                 }
                             }),
                             contentType: "application/json; charset=utf-8",
@@ -265,6 +280,8 @@
                             data: {
                                 type: data.node.type,
                                 text: data.node.text,
+                                id: data.node.id,
+                                parent_id: data.node.parent,
                                 path: data.instance.get_path(data.node)
                             }
                         }),
@@ -308,18 +325,17 @@
             },
             'contextmenu': {
                 'items': function (node) {
-                    var tmp = $.jstree.defaults.contextmenu.items();
+                    let tmp = $.jstree.defaults.contextmenu.items();
                     delete tmp.create.action;
                     tmp.create.label = "New";
                     tmp.create.separator_after = false;
                     tmp.create.submenu = {
                         "create_folder": {
-                            // "separator_after": true,
                             "label": "Folder",
                             "action": function (data) {
-                                var inst = $.jstree.reference(data.reference);
-                                var obj = inst.get_node(data.reference);
-                                inst.create_node(obj, {type: "default"}, "last", function (new_node) {
+                                let inst = $.jstree.reference(data.reference);
+                                let obj = inst.get_node(data.reference);
+                                inst.create_node(obj, {type: "default",id:uuid_generate()}, "last", function (new_node) {
                                     setTimeout(function () {
                                         inst.edit(new_node);
                                     }, 0);
@@ -329,10 +345,10 @@
                         "create_file": {
                             "label": "File",
                             "action": function (data) {
-                                var inst = $.jstree.reference(data.reference);
+                                let inst = $.jstree.reference(data.reference);
                                 console.log(inst.get_node(data.reference));
-                                var obj = inst.get_node(data.reference);
-                                inst.create_node(obj, {type: "file"}, "last", function (new_node) {
+                                let obj = inst.get_node(data.reference);
+                                inst.create_node(obj, {type: "file",id:uuid_generate()}, "last", function (new_node) {
                                     setTimeout(function () {
                                         inst.edit(new_node);
                                     }, 0);
@@ -342,7 +358,7 @@
                         "create_brother": {
                             "label": "BroFolder",
                             "action": function (data) {
-                                $("#SuperJSTree").jstree(true).create_node('#', {type: "default"}, "last", function (new_node) {
+                                $("#SuperJSTree").jstree(true).create_node('#', {type: "default",id:uuid_generate()}, "last", function (new_node) {
                                     setTimeout(function () {
                                         $("#SuperJSTree").jstree(true).edit(new_node);
                                     }, 0);
@@ -352,6 +368,16 @@
                     };
                     if (this.get_type(node) === "file") {
                         delete tmp.create;
+                        tmp["Open"] = {
+                            "separator_before": false,
+                            "separator_after": false,
+                            "label": "Open",
+                            "action": function (data) {
+                                let inst = $.jstree.reference(data.reference);//
+                                let obj = inst.get_node(data.reference);
+                                console.log("nodes:", JSON.stringify($("#SuperJSTree").jstree(true).get_path(obj)));// 需要根据path换一个id
+                            }
+                        }
                     } else if (node.parent !== '#') {
                         delete tmp.create.submenu.create_brother;
                     }
@@ -447,7 +473,8 @@
                             command: "save_markdown.jstree",
                             data: {
                                 text: editor.getMarkdown(),
-                                origin_path: $("#SuperJSTree").jstree(true).get_path(editorMarkdownStatus.node)
+                                origin_path: $("#SuperJSTree").jstree(true).get_path(editorMarkdownStatus.node),
+                                id: editorMarkdownStatus.node.id
                             }
                         }),
                         contentType: "application/json; charset=utf-8",

@@ -8,7 +8,7 @@ const BaseImage = require('./libs/base_image');
 const BaseSync = require('./libs/base_sync');
 const BaseConfig = require('./libs/base_config');
 const BaseFileHandler = require('./libs/base_file_handler');
-const BaseHttpServer = require('./libs/base_http_server');
+const Bookshelf = require('./libs/bookshelf');
 let WorkSpaceDirs = [];
 let mainWindow;
 log.info(process.platform);
@@ -32,6 +32,8 @@ let baseImageConf = new BaseImage(imageSpaceDir, workConfLocal, splitStr);
 let baseSyncConf = new BaseSync(workConfLocal, workConfGlobal, splitStr);
 let baseAppConf = new BaseConfig(workConfLocal, workConfGlobal, splitStr);
 let baseFileHandler = new BaseFileHandler(workSpaceName, workSpaceConfLocalName, workSpaceConfGlobalName, splitStr, baseAppConf, baseImageConf);
+let bookshelf = new Bookshelf(workspaceDir);
+
 
 const express = require('express')
 const bodyParser = require('body-parser');
@@ -82,18 +84,20 @@ httpApp.post('/message', (req, res) => {
     }
     switch (req.body.command) {
         case 'request-init-work-tree':
-            WorkSpaceDirs=baseFileHandler.GetOrCreateUserWorkSpace();
+            WorkSpaceDirs = bookshelf.generateShowTrees();
             result["data"] = WorkSpaceDirs;
             break
         case 'create_node.jstree':
             log.info("create_node.jstree")
             if (req.body.data.type === "default") {
                 result["data"] = {
-                    "created": baseFileHandler.CreateDir(req.body.data.path)
+                    // "created": baseFileHandler.CreateDir(req.body.data.path)
+                    "created": bookshelf.addNewBook(req.body.data.parent_id, req.body.data.id, req.body.data.text),
                 }
             } else {
                 result["data"] = {
-                    "created": baseFileHandler.CreateFile(req.body.data.path)
+                    // "created": baseFileHandler.CreateFile(req.body.data.path)
+                    "created": bookshelf.addNewNote(req.body.data.parent_id, req.body.data.id, req.body.data.text)
                 }
             }
             break
@@ -101,9 +105,11 @@ httpApp.post('/message', (req, res) => {
             log.info("rename_node.jstree")
             // TODO: rename should change image save info
             if (req.body.data.type === "default") {
-                baseFileHandler.RenameDir(req.body.data.path, req.body.data.old)
+                bookshelf.renameBook(req.body.data.id, req.body.data.text);
+                // baseFileHandler.RenameDir(req.body.data.path, req.body.data.old)
             } else {
-                baseFileHandler.RenameFile(req.body.data.path, req.body.data.old)
+                // baseFileHandler.RenameFile(req.body.data.path, req.body.data.old)
+                bookshelf.renameNote(req.body.data.id, req.body.data.text);
             }
 
             break
@@ -111,7 +117,8 @@ httpApp.post('/message', (req, res) => {
             log.info("open.jstree")
             if (req.body.data.type === "file") {
                 result["data"] = {
-                    "text": baseFileHandler.ReadMarkdownFromFile(req.body.data.path),
+                    // "text": baseFileHandler.ReadMarkdownFromFile(req.body.data.path),
+                    "text": bookshelf.readNote(req.body.data.id),
                     "read": true,
                     "path": req.body.data.path.join(splitStr)
                 }
@@ -120,7 +127,8 @@ httpApp.post('/message', (req, res) => {
         case 'save_markdown.jstree':
             log.info("save_markdown.jstree")
             if (req.body.data.origin_path) {
-                baseFileHandler.WriteMarkdownFromFile(req.body.data.origin_path, req.body.data.text);
+                // baseFileHandler.WriteMarkdownFromFile(req.body.data.origin_path, req.body.data.text);
+                bookshelf.writeNote(req.body.data.id, req.body.data.text);
             }
             break
 

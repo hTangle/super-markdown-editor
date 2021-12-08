@@ -1,14 +1,8 @@
 const BaseUtil = require('./base_util');
+const BaseRedoLog = require('./base_redo');
 const uuid = require("uuid");
 const log = require('electron-log');
-
-class RedoAction {
-    static SAVE_IMAGE = "save_image";
-    static SAVE_ARTICLE = "save_article";
-    static RENAME_ARTICLE = "rename_article";
-    static RENAME_DIR = "rename_dir";
-    static CREATE_DIR = "create_dir";
-}
+const RedoAction = require('./redo_action');
 
 class BaseConfig {
     static #BASE_CONF_NAME = "base.conf.json";
@@ -21,6 +15,7 @@ class BaseConfig {
         BaseUtil.createDirIfNotExist(this.conf_local);
         BaseUtil.createDirIfNotExist(this.conf_global);
         this.#initBaseConfLocal();
+        this.base_redo = new BaseRedoLog(conf_global);
     }
 
     #initBaseConfLocal() {
@@ -47,46 +42,56 @@ class BaseConfig {
     // TODO: 每次保存文件的时候，需要先将当前的age+1，然后将文件内容，对应的图片内容，当前配置信息上传到服务端
     //  保存文件的正确步骤应该是：1. 拉去最新的配置 2. 将获取到的age+1，上传更新内容
     saveArticle(article_path) {
-        this.logger.warn(JSON.stringify({
+        let data = {
             action: RedoAction.SAVE_ARTICLE,
             path: article_path,
             time: Date.now()
-        }));
+        };
+        this.logger.warn(JSON.stringify(data));
+        this.base_redo.writeRedoLog(data);
     }
 
     uploadImage(imageName, paths) {
-        this.logger.warn(JSON.stringify({
+        let data = {
             action: RedoAction.SAVE_IMAGE,
             path: paths,
             image_name: imageName,
             time: Date.now()
-        }));
+        };
+        this.logger.warn(JSON.stringify(data));
+        this.base_redo.writeRedoLog(data);
     }
 
     renameArticle(old_article_name, new_article_name) {
-        this.logger.warn(JSON.stringify({
+        let data = {
             action: RedoAction.RENAME_ARTICLE,
             old_path: old_article_name,
             new_path: new_article_name,
             time: Date.now()
-        }));
+        };
+        this.logger.warn(JSON.stringify(data));
+        this.base_redo.writeRedoLog(data);
     }
 
     createDir(dir_path) {
-        this.logger.warn(JSON.stringify({
+        let data = {
             action: RedoAction.CREATE_DIR,
             path: dir_path,
             time: Date.now()
-        }));
+        };
+        this.logger.warn(JSON.stringify(data));
+        this.base_redo.writeRedoLog(data);
     }
 
     renameDir(old_dir_path, new_dir_path) {
-        this.logger.warn(JSON.stringify({
+        let data = {
             action: RedoAction.RENAME_DIR,
             old_path: old_dir_path,
             new_path: new_dir_path,
             time: Date.now()
-        }));
+        };
+        this.logger.warn(JSON.stringify(data));
+        this.base_redo.writeRedoLog(data);
     }
 
     deleteDir(dir_path) {
