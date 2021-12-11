@@ -1,9 +1,10 @@
-class RedoAction {
-    static SAVE_IMAGE = "save_image";
-    static SAVE_ARTICLE = "save_article";
-    static RENAME_ARTICLE = "rename_article";
-    static RENAME_DIR = "rename_dir";
-    static CREATE_DIR = "create_dir";
+class ActionType {
+    static TYPE_IMAGE = "image";
+    static TYPE_NOTE = "note";
+    static TYPE_BOOK = "book";
+
+    static ACTION_UPDATE = "update";
+    static ACTION_DELETE = "delete";
 }
 
-module.exports = RedoAction;
+module.exports = ActionType;

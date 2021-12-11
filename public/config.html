@@ -106,33 +106,7 @@
          style="width: auto;height: auto;max-width: 100%;max-height: 100%;">
 </div>
 <script>
-    function getQueryVariable(variable) {
-        let query = window.location.search.substring(1);
-        let vars = query.split("&");
-        for (let i = 0; i < vars.length; i++) {
-            let pair = vars[i].split("=");
-            if (pair[0] === variable) {
-                return pair[1];
-            }
-        }
-        return false;
-    }
-
-    let article_id = getQueryVariable("id");
-    let edit_id = getQueryVariable("edit");
-    console.log("need to open:", article_id);
-
-    var select_node_dev;
-    var select_before = "";
-    var select_before_timestamp = 0;
-    var select_current = "";
-    var select_current_timestamp = 0;
-    var open_file_path;
-    var global_data;
-    var init_flag = false;
-    var imageClicked = false;
     var softwareName = "SuperMarkdownEditor";
-    var imageUploadURL = "/upload/image";
     var editorMarkdownStatus = {
         changed: false,
         current_file_path: [],
@@ -145,50 +119,16 @@
         height: "100%",
         path: "lib/editor.md/lib/",
         syncScrolling: "single",
-        emoji: false,
-        taskList: true,
-        tocm: true,         // Using [TOCM]
-        tex: true,
-        flowChart: true,
-        sequenceDiagram: true,
+        watch: false,
         toolbarIcons: function () {
-            return editormd.toolbarModes['simple']; // full, simple, mini
+            return editormd.toolbarModes['mini']; // full, simple, mini
         },
-        imageUpload: true,
-        imageFormats: ["jpg", "jpeg", "gif", "png", "bmp", "webp"],
-        imageUploadURL: "/upload/image",
         onchange: function () {
+            console.log("change editor")
             editorMarkdownStatus.changed = true;
+            $('title').html(softwareName + "[config*]");
         }
     });
-    editor.imagePaste();
-
-    var modal = document.getElementById("myModal");
-    var modalImg = document.getElementById("img01");
-
-    // When the user clicks on <span> (x), close the modal
-    function disShowImage() {
-        modal.style.display = "none";
-    }
-
-    function zoomImg(obj) {
-        // 一开始默认是100%
-        let zoom = parseInt(obj.style.zoom, 10) || 100;
-        // 滚轮滚一下wheelDelta的值增加或减少120
-        zoom += event.wheelDelta / 12;
-        if (zoom > 0) {
-            obj.style.zoom = zoom + '%';
-        }
-        return false;
-    }
-
-    function ShowImageFunction(srcUrl) {
-        console.log(srcUrl);
-        modal.style.display = "block";
-        modalImg.style.zoom = "reset";
-        modalImg.src = srcUrl;
-        imageClicked = true;
-    }
 
     window.onload = function () {
         $.ajax({
@@ -196,12 +136,7 @@
             url: "/message",
             async: false,
             data: JSON.stringify({
-                command: "open.jstree",
-                data: {
-                    id: article_id,
-                    path: "",
-                    type: "file"
-                }
+                command: "config.editor"
             }),
             contentType: "application/json; charset=utf-8",
             dataType: "json",
@@ -222,33 +157,27 @@
             var bCtrlKeyCode = oEvent.ctrlKey || oEvent.metaKey;
             if (nKeyCode === "KeyS" && bCtrlKeyCode) {
                 oEvent.preventDefault();
-                if (editorMarkdownStatus.changed) {
-                    //only changed file can be saved
-                    $.ajax({
-                        type: "post",
-                        url: "/message",
-                        async: true,
-                        data: JSON.stringify({
-                            command: "save_markdown.jstree",
-                            data: {
-                                text: editor.getMarkdown(),
-                                id: article_id,
-                                edit_id: edit_id
-                            }
-                        }),
-                        contentType: "application/json; charset=utf-8",
-                        dataType: "json",
-                        success: function (data) {
-                            if (data.status === "success") {
-                                editorMarkdownStatus.changed = false;
-                            }
+                //only changed file can be saved
+                $.ajax({
+                    type: "post",
+                    url: "/message",
+                    async: true,
+                    data: JSON.stringify({
+                        command: "save_config.editor",
+                        data: {
+                            text: editor.getMarkdown()
                         }
-                    });
-                }
+                    }),
+                    contentType: "application/json; charset=utf-8",
+                    dataType: "json",
+                    success: function (data) {
+                        if (data.status === "success") {
+                            editorMarkdownStatus.changed = false;
+                            $('title').html(softwareName + "[config]");
+                        }
+                    }
+                });
 
-            } else if (nKeyCode === "Escape" && imageClicked) {
-                imageClicked = false;
-                modal.style.display = "none";
             }
         }
     }

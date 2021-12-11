@@ -1,14 +1,12 @@
-const {app, BrowserWindow, Menu, MenuItem} = require('electron')
+const {electron, app, BrowserWindow, Menu, MenuItem} = require('electron')
 const path = require('path')
 const log = require('electron-log');
 const fs = require('fs');
 const {v4: uuidv4} = require('uuid');
 const osenv = require('osenv');
-const BaseImage = require('./libs/base_image');
-const BaseSync = require('./libs/base_sync');
-const BaseConfig = require('./libs/base_config');
-const BaseFileHandler = require('./libs/base_file_handler');
 const Bookshelf = require('./libs/bookshelf');
+const ShelfRedo = require('./libs/shelf_redo');
+const EditorConf = require('./libs/editor_conf');
 let WorkSpaceDirs = [];
 let mainWindow;
 log.info(process.platform);
@@ -17,22 +15,248 @@ if (process.platform === 'win32') {
     splitStr = "\\";
 }
 
+let template = [{
+    label: '编辑',
+    submenu: [{
+        label: '撤销',
+        accelerator: 'CmdOrCtrl+Z',
+        role: 'undo'
+    }, {
+        label: '重做',
+        accelerator: 'Shift+CmdOrCtrl+Z',
+        role: 'redo'
+    }, {
+        type: 'separator'
+    }, {
+        label: '剪切',
+        accelerator: 'CmdOrCtrl+X',
+        role: 'cut'
+    }, {
+        label: '复制',
+        accelerator: 'CmdOrCtrl+C',
+        role: 'copy'
+    }, {
+        label: '粘贴',
+        accelerator: 'CmdOrCtrl+V',
+        role: 'paste'
+    }, {
+        label: '全选',
+        accelerator: 'CmdOrCtrl+A',
+        role: 'selectall'
+    }]
+}, {
+    label: '查看',
+    submenu: [{
+        label: '重载',
+        accelerator: 'CmdOrCtrl+R',
+        click: function (item, focusedWindow) {
+            if (focusedWindow) {
+                // 重载之后, 刷新并关闭所有的次要窗体
+                if (focusedWindow.id === 1) {
+                    BrowserWindow.getAllWindows().forEach(function (win) {
+                        if (win.id > 1) {
+                            win.close()
+                        }
+                    })
+                }
+                focusedWindow.reload()
+            }
+        }
+    }, {
+        label: '切换全屏',
+        accelerator: (function () {
+            if (process.platform === 'darwin') {
+                return 'Ctrl+Command+F'
+            } else {
+                return 'F11'
+            }
+        })(),
+        click: function (item, focusedWindow) {
+            if (focusedWindow) {
+                focusedWindow.setFullScreen(!focusedWindow.isFullScreen())
+            }
+        }
+    }, {
+        label: '切换开发者工具',
+        accelerator: (function () {
+            if (process.platform === 'darwin') {
+                return 'Alt+Command+I'
+            } else {
+                return 'Ctrl+Shift+I'
+            }
+        })(),
+        click: function (item, focusedWindow) {
+            if (focusedWindow) {
+                focusedWindow.toggleDevTools()
+            }
+        }
+    }, {
+        type: 'separator'
+    }, {
+        label: '应用程序菜单演示',
+        click: function (item, focusedWindow) {
+            if (focusedWindow) {
+                const options = {
+                    type: 'info',
+                    title: '应用程序菜单演示',
+                    buttons: ['好的'],
+                    message: '此演示用于 "菜单" 部分, 展示如何在应用程序菜单中创建可点击的菜单项.'
+                }
+                electron.dialog.showMessageBox(focusedWindow, options, function () {
+                })
+            }
+        }
+    }]
+}, {
+    label: '窗口',
+    role: 'window',
+    submenu: [{
+        label: '最小化',
+        accelerator: 'CmdOrCtrl+M',
+        role: 'minimize'
+    }, {
+        label: '关闭',
+        accelerator: 'CmdOrCtrl+W',
+        role: 'close'
+    }, {
+        type: 'separator'
+    }, {
+        label: '重新打开窗口',
+        accelerator: 'CmdOrCtrl+Shift+T',
+        enabled: false,
+        key: 'reopenMenuItem',
+        click: function () {
+            app.emit('activate')
+        }
+    }, {
+        label: '修改配置',
+        click: function () {
+            app.emit('edit_config')
+        }
+    }]
+}, {
+    label: '帮助',
+    role: 'help',
+    submenu: [{
+        label: '学习更多',
+        click: function () {
+            electron.shell.openExternal('http://electron.atom.io')
+        }
+    }]
+}]
+
+function addUpdateMenuItems(items, position) {
+    if (process.mas) return
+
+    const version = app.getVersion()
+    let updateItems = [{
+        label: `Version ${version}`,
+        enabled: false
+    }, {
+        label: '正在检查更新',
+        enabled: false,
+        key: 'checkingForUpdate'
+    }, {
+        label: '检查更新',
+        visible: false,
+        key: 'checkForUpdate',
+        click: function () {
+            require('electron').autoUpdater.checkForUpdates()
+        }
+    }, {
+        label: '重启并安装更新',
+        enabled: true,
+        visible: false,
+        key: 'restartToUpdate',
+        click: function () {
+            require('electron').autoUpdater.quitAndInstall()
+        }
+    }]
+
+    items.splice.apply(items, [position, 0].concat(updateItems))
+}
+
+function findReopenMenuItem() {
+    const menu = Menu.getApplicationMenu()
+    if (!menu) return
+
+    let reopenMenuItem
+    menu.items.forEach(function (item) {
+        if (item.submenu) {
+            item.submenu.items.forEach(function (item) {
+                if (item.key === 'reopenMenuItem') {
+                    reopenMenuItem = item
+                }
+            })
+        }
+    })
+    return reopenMenuItem
+}
+
+if (process.platform === 'darwin') {
+    const name = electron.app.getName()
+    template.unshift({
+        label: name,
+        submenu: [{
+            label: `关于 ${name}`,
+            role: 'about'
+        }, {
+            type: 'separator'
+        }, {
+            label: '服务',
+            role: 'services',
+            submenu: []
+        }, {
+            type: 'separator'
+        }, {
+            label: `隐藏 ${name}`,
+            accelerator: 'Command+H',
+            role: 'hide'
+        }, {
+            label: '隐藏其它',
+            accelerator: 'Command+Alt+H',
+            role: 'hideothers'
+        }, {
+            label: '显示全部',
+            role: 'unhide'
+        }, {
+            type: 'separator'
+        }, {
+            label: '退出',
+            accelerator: 'Command+Q',
+            click: function () {
+                app.quit()
+            }
+        }]
+    })
+
+    // 窗口菜单.
+    template[3].submenu.push({
+        type: 'separator'
+    }, {
+        label: '前置所有',
+        role: 'front'
+    })
+
+    addUpdateMenuItems(template[0].submenu, 1)
+}
+
+if (process.platform === 'win32') {
+    const helpMenu = template[template.length - 1].submenu
+    addUpdateMenuItems(helpMenu, 0)
+}
+
 function getUsersHomeFolder() {
     return osenv.home();
 }
 
 const workSpaceName = "super-markdown-editor";
-const workSpaceConfLocalName = ".conf_local";
-const workSpaceConfGlobalName = ".conf_global";
+const localConfDir = path.join(getUsersHomeFolder(), workSpaceName, ".local")
 const workspaceDir = path.join(getUsersHomeFolder(), workSpaceName);
-const workConfLocal = path.join(getUsersHomeFolder(), workSpaceName, workSpaceConfLocalName);
-const workConfGlobal = path.join(getUsersHomeFolder(), workSpaceName, workSpaceConfGlobalName);
 const imageSpaceDir = path.join(getUsersHomeFolder(), "super-markdown-editor", "image");
-let baseImageConf = new BaseImage(imageSpaceDir, workConfLocal, splitStr);
-let baseSyncConf = new BaseSync(workConfLocal, workConfGlobal, splitStr);
-let baseAppConf = new BaseConfig(workConfLocal, workConfGlobal, splitStr);
-let baseFileHandler = new BaseFileHandler(workSpaceName, workSpaceConfLocalName, workSpaceConfGlobalName, splitStr, baseAppConf, baseImageConf);
-let bookshelf = new Bookshelf(workspaceDir);
+let editorConf = new EditorConf(localConfDir);
+let shelfRedo = new ShelfRedo(workspaceDir, editorConf.conf.id);
+let bookshelf = new Bookshelf(workspaceDir, shelfRedo);
 
 
 const express = require('express')
@@ -68,13 +292,9 @@ httpApp.post("/upload/image", (req, res) => {
             res.locals.error = err;
             return;
         }
-
         isSuccess = true
         result["success"] = 1
         result["url"] = "/image/" + files["editormd-image-file"].newFilename;
-        if (fields["open_file_path"]) {
-            baseImageConf.saveImage(files["editormd-image-file"].newFilename, JSON.parse(fields["open_file_path"]));
-        }
         res.send(JSON.stringify(result));
     });
 })
@@ -146,9 +366,19 @@ httpApp.post('/message', (req, res) => {
             } else {
                 createEditWindow(req.body.data.id);
             }
-
             break
-
+        case 'config.editor.open':
+            createConfigWindow();
+            break
+        case 'config.editor':
+            result["data"] = {
+                text: editorConf.getCnf(),
+                name: "conf"
+            }
+            break
+        case 'save_config.editor':
+            editorConf.setCnf(req.body.data.text);
+            break
     }
     res.send(JSON.stringify(result));
 })
@@ -156,6 +386,28 @@ httpApp.post('/message', (req, res) => {
 const httpServer = httpApp.listen(port, () => {
     log.info(`Example app listening at http://localhost:${port}`)
 })
+
+function createConfigWindow() {
+    if (editWindows.hasOwnProperty("config")) {
+        editWindows["config"].show();
+    } else {
+        let configWindow = new BrowserWindow({
+            width: 1800,
+            height: 900,
+            webPreferences: {
+                nodeIntegration: false,
+            }
+        });
+        configWindow.loadURL('http://127.0.0.1:3000/config.html');
+        configWindow.webContents.openDevTools()
+        configWindow.on('closed', () => {
+            delete editWindows["config"];
+            log.debug(configWindow, "closed");
+            configWindow = null;
+        });
+        editWindows["config"] = configWindow;
+    }
+}
 
 function createEditWindow(id) {
     let editWindow = new BrowserWindow({
@@ -207,11 +459,24 @@ app.whenReady().then(() => {
         // 打开的窗口，那么程序会重新创建一个窗口。
         if (BrowserWindow.getAllWindows().length === 0) createWindow();
     })
-})
 
+});
+app.on('edit_config', function () {
+    createConfigWindow();
+})
+app.on('ready', function () {
+    const menu = Menu.buildFromTemplate(template)
+    Menu.setApplicationMenu(menu)
+})
+app.on('browser-window-created', function () {
+    let reopenMenuItem = findReopenMenuItem()
+    if (reopenMenuItem) reopenMenuItem.enabled = false
+})
 // 除了 macOS 外，当所有窗口都被关闭的时候退出程序。 因此，通常对程序和它们在
 // 任务栏上的图标来说，应当保持活跃状态，直到用户使用 Cmd + Q 退出。
 app.on('window-all-closed', function () {
+    let reopenMenuItem = findReopenMenuItem()
+    if (reopenMenuItem) reopenMenuItem.enabled = true
     if (process.platform !== 'darwin') {
         app.quit()
     }

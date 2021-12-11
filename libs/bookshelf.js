@@ -1,18 +1,17 @@
-/**
- *
- */
 const fs = require('fs');
-const path = require('path')
+const path = require('path');
 const osenv = require('osenv');
 const log = require('electron-log');
 const BaseUtil = require('./base_util');
+const ActionType = require('./redo_action');
 
 class Bookshelf {
     static #NOTE_DIR = "note";
     static #BOOK_DIR = "book";
 
-    constructor(workdir) {
+    constructor(workdir, shelfRedo) {
         this.workdir = workdir;
+        this.redo = shelfRedo;
         this.book_path = path.join(workdir, Bookshelf.#BOOK_DIR);
         this.note_path = path.join(workdir, Bookshelf.#NOTE_DIR);
         BaseUtil.createDirIfNotExist(this.book_path);
@@ -115,6 +114,15 @@ class Bookshelf {
         return tree;
     }
 
+    recordInfo(id, type_, action_) {
+        this.redo.writeRedoLog({
+            id: id,
+            type: type_,
+            action: action_,
+            time: Date.now()
+        })
+    }
+
     renameBook(id, new_name) {
         this.id_info[id].show_name = new_name;
         this.id_info[id].update_time = Date.now();
@@ -132,6 +140,7 @@ class Bookshelf {
         }
         this.syncChangeToDisk(id);
         this.addIdNameMapping(parent_id, id);
+        this.recordInfo(id, ActionType.TYPE_BOOK, ActionType.ACTION_UPDATE);
     }
 
     addNewNote(parent_id, id, show_name) {
@@ -146,12 +155,14 @@ class Bookshelf {
         this.syncChangeToDisk(id);
         this.writeNote(id, "");
         this.addIdNameMapping(parent_id, id);
+        this.recordInfo(id, ActionType.TYPE_NOTE, ActionType.ACTION_UPDATE);
     }
 
     renameNote(id, new_name) {
         this.id_info[id].show_name = new_name;
         this.id_info[id].update_time = Date.now();
         this.syncChangeToDisk(id);
+        this.recordInfo(id, ActionType.TYPE_NOTE, ActionType.ACTION_UPDATE);
     }
 
     readNote(id) {
@@ -169,14 +180,16 @@ class Bookshelf {
             // TODO: check image should delete
             console.log('The file has been saved! ' + id);
         });
+        this.recordInfo(id, ActionType.TYPE_NOTE, ActionType.ACTION_UPDATE);
     }
 
     syncChangeToDisk(id) {
         // TODO: mark file changed
         fs.writeFile(this.getIdSyncPath(id), JSON.stringify(this.id_info[id]), {encoding: 'utf8'}, (err) => {
             if (err) throw err;
-            log.error('The file has been saved!', this.getIdSyncPath(id));
+            log.debug('The file has been saved!', this.getIdSyncPath(id));
         });
+        this.recordInfo(id, ActionType.TYPE_BOOK, ActionType.ACTION_UPDATE);
     }
 
     getIdSyncPath(id) {
