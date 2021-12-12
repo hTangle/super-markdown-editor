@@ -15,135 +15,169 @@ if (process.platform === 'win32') {
     splitStr = "\\";
 }
 
-let template = [{
-    label: '编辑',
-    submenu: [{
-        label: '撤销',
-        accelerator: 'CmdOrCtrl+Z',
-        role: 'undo'
-    }, {
-        label: '重做',
-        accelerator: 'Shift+CmdOrCtrl+Z',
-        role: 'redo'
-    }, {
-        type: 'separator'
-    }, {
-        label: '剪切',
-        accelerator: 'CmdOrCtrl+X',
-        role: 'cut'
-    }, {
-        label: '复制',
-        accelerator: 'CmdOrCtrl+C',
-        role: 'copy'
-    }, {
-        label: '粘贴',
-        accelerator: 'CmdOrCtrl+V',
-        role: 'paste'
-    }, {
-        label: '全选',
-        accelerator: 'CmdOrCtrl+A',
-        role: 'selectall'
-    }]
-}, {
-    label: '查看',
-    submenu: [{
-        label: '重载',
-        accelerator: 'CmdOrCtrl+R',
-        click: function (item, focusedWindow) {
-            if (focusedWindow) {
-                // 重载之后, 刷新并关闭所有的次要窗体
-                if (focusedWindow.id === 1) {
-                    BrowserWindow.getAllWindows().forEach(function (win) {
-                        if (win.id > 1) {
-                            win.close()
-                        }
+let template = [
+    {
+        label: '编辑',
+        submenu: [
+            {
+                label: '同步',
+                click: function () {
+                    app.emit('start_sync');
+                }
+            },
+            {
+                label: '撤销',
+                accelerator: 'CmdOrCtrl+Z',
+                role: 'undo'
+            }, {
+                label: '重做',
+                accelerator: 'Shift+CmdOrCtrl+Z',
+                role: 'redo'
+            }, {
+                type: 'separator'
+            }, {
+                label: '剪切',
+                accelerator: 'CmdOrCtrl+X',
+                role: 'cut'
+            }, {
+                label: '复制',
+                accelerator: 'CmdOrCtrl+C',
+                role: 'copy'
+            }, {
+                label: '粘贴',
+                accelerator: 'CmdOrCtrl+V',
+                role: 'paste'
+            }, {
+                label: '全选',
+                accelerator: 'CmdOrCtrl+A',
+                role: 'selectall'
+            }]
+    },
+    {
+        "label": "同步",
+        submenu: [
+            {
+                label: '开始同步',
+                click: function () {
+                    app.emit('start_sync');
+                }
+            },
+            {
+                label: 'List Objects',
+                click: function () {
+                    app.emit('start_sync_list_objs');
+                }
+            },
+            {
+                label: 'Sync Objects',
+                click: function () {
+                    app.emit('start_sync_to_s3');
+                }
+            }
+        ]
+    },
+    {
+        label: '查看',
+        submenu: [{
+            label: '重载',
+            accelerator: 'CmdOrCtrl+R',
+            click: function (item, focusedWindow) {
+                if (focusedWindow) {
+                    // 重载之后, 刷新并关闭所有的次要窗体
+                    if (focusedWindow.id === 1) {
+                        BrowserWindow.getAllWindows().forEach(function (win) {
+                            if (win.id > 1) {
+                                win.close()
+                            }
+                        })
+                    }
+                    focusedWindow.reload()
+                }
+            }
+        }, {
+            label: '切换全屏',
+            accelerator: (function () {
+                if (process.platform === 'darwin') {
+                    return 'Ctrl+Command+F'
+                } else {
+                    return 'F11'
+                }
+            })(),
+            click: function (item, focusedWindow) {
+                if (focusedWindow) {
+                    focusedWindow.setFullScreen(!focusedWindow.isFullScreen())
+                }
+            }
+        }, {
+            label: '切换开发者工具',
+            accelerator: (function () {
+                if (process.platform === 'darwin') {
+                    return 'Alt+Command+I'
+                } else {
+                    return 'Ctrl+Shift+I'
+                }
+            })(),
+            click: function (item, focusedWindow) {
+                if (focusedWindow) {
+                    focusedWindow.toggleDevTools()
+                }
+            }
+        }, {
+            type: 'separator'
+        }, {
+            label: '应用程序菜单演示',
+            click: function (item, focusedWindow) {
+                if (focusedWindow) {
+                    const options = {
+                        type: 'info',
+                        title: '应用程序菜单演示',
+                        buttons: ['好的'],
+                        message: '此演示用于 "菜单" 部分, 展示如何在应用程序菜单中创建可点击的菜单项.'
+                    }
+                    electron.dialog.showMessageBox(focusedWindow, options, function () {
                     })
                 }
-                focusedWindow.reload()
             }
-        }
-    }, {
-        label: '切换全屏',
-        accelerator: (function () {
-            if (process.platform === 'darwin') {
-                return 'Ctrl+Command+F'
-            } else {
-                return 'F11'
+        }]
+    },
+    {
+        label: '窗口',
+        role: 'window',
+        submenu: [{
+            label: '最小化',
+            accelerator: 'CmdOrCtrl+M',
+            role: 'minimize'
+        }, {
+            label: '关闭',
+            accelerator: 'CmdOrCtrl+W',
+            role: 'close'
+        }, {
+            type: 'separator'
+        }, {
+            label: '重新打开窗口',
+            accelerator: 'CmdOrCtrl+Shift+T',
+            enabled: false,
+            key: 'reopenMenuItem',
+            click: function () {
+                app.emit('activate')
             }
-        })(),
-        click: function (item, focusedWindow) {
-            if (focusedWindow) {
-                focusedWindow.setFullScreen(!focusedWindow.isFullScreen())
+        }, {
+            label: '修改配置',
+            click: function () {
+                app.emit('edit_config')
             }
-        }
-    }, {
-        label: '切换开发者工具',
-        accelerator: (function () {
-            if (process.platform === 'darwin') {
-                return 'Alt+Command+I'
-            } else {
-                return 'Ctrl+Shift+I'
+        }]
+    },
+    {
+        label: '帮助',
+        role: 'help',
+        submenu: [{
+            label: '学习更多',
+            click: function () {
+                electron.shell.openExternal('http://electron.atom.io')
             }
-        })(),
-        click: function (item, focusedWindow) {
-            if (focusedWindow) {
-                focusedWindow.toggleDevTools()
-            }
-        }
-    }, {
-        type: 'separator'
-    }, {
-        label: '应用程序菜单演示',
-        click: function (item, focusedWindow) {
-            if (focusedWindow) {
-                const options = {
-                    type: 'info',
-                    title: '应用程序菜单演示',
-                    buttons: ['好的'],
-                    message: '此演示用于 "菜单" 部分, 展示如何在应用程序菜单中创建可点击的菜单项.'
-                }
-                electron.dialog.showMessageBox(focusedWindow, options, function () {
-                })
-            }
-        }
+        }]
     }]
-}, {
-    label: '窗口',
-    role: 'window',
-    submenu: [{
-        label: '最小化',
-        accelerator: 'CmdOrCtrl+M',
-        role: 'minimize'
-    }, {
-        label: '关闭',
-        accelerator: 'CmdOrCtrl+W',
-        role: 'close'
-    }, {
-        type: 'separator'
-    }, {
-        label: '重新打开窗口',
-        accelerator: 'CmdOrCtrl+Shift+T',
-        enabled: false,
-        key: 'reopenMenuItem',
-        click: function () {
-            app.emit('activate')
-        }
-    }, {
-        label: '修改配置',
-        click: function () {
-            app.emit('edit_config')
-        }
-    }]
-}, {
-    label: '帮助',
-    role: 'help',
-    submenu: [{
-        label: '学习更多',
-        click: function () {
-            electron.shell.openExternal('http://electron.atom.io')
-        }
-    }]
-}]
 
 function addUpdateMenuItems(items, position) {
     if (process.mas) return
@@ -255,7 +289,7 @@ const localConfDir = path.join(getUsersHomeFolder(), workSpaceName, ".local")
 const workspaceDir = path.join(getUsersHomeFolder(), workSpaceName);
 const imageSpaceDir = path.join(getUsersHomeFolder(), "super-markdown-editor", "image");
 let editorConf = new EditorConf(localConfDir);
-let shelfRedo = new ShelfRedo(workspaceDir, editorConf.conf.id);
+let shelfRedo = new ShelfRedo(workspaceDir, editorConf);
 let bookshelf = new Bookshelf(workspaceDir, shelfRedo);
 
 
@@ -463,6 +497,15 @@ app.whenReady().then(() => {
 });
 app.on('edit_config', function () {
     createConfigWindow();
+})
+app.on('start_sync', function () {
+    shelfRedo.getChangeLog();
+});
+app.on('start_sync_list_objs', function () {
+    shelfRedo.listObjectsInBucket();
+});
+app.on("start_sync_to_s3", function () {
+    shelfRedo.startSyncToS3();
 })
 app.on('ready', function () {
     const menu = Menu.buildFromTemplate(template)

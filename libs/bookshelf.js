@@ -41,7 +41,6 @@ class Bookshelf {
             } else {
                 this.root_node[shelf_id] = true;
             }
-
         });
         this.#initWelcomeData();
     }
