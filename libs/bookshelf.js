@@ -142,6 +142,10 @@ class Bookshelf {
         this.recordInfo(id, ActionType.TYPE_BOOK, ActionType.ACTION_UPDATE);
     }
 
+    addNewImage(id) {
+        this.recordInfo(id, ActionType.TYPE_IMAGE, ActionType.ACTION_UPDATE);
+    }
+
     addNewNote(parent_id, id, show_name) {
         this.id_info[id] = {
             parent_id: parent_id,

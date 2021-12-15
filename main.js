@@ -329,6 +329,7 @@ httpApp.post("/upload/image", (req, res) => {
         isSuccess = true
         result["success"] = 1
         result["url"] = "/image/" + files["editormd-image-file"].newFilename;
+        bookshelf.addNewImage(files["editormd-image-file"].newFilename);
         res.send(JSON.stringify(result));
     });
 })
@@ -433,13 +434,13 @@ function createConfigWindow() {
             }
         });
         configWindow.loadURL('http://127.0.0.1:3000/config.html');
-        configWindow.webContents.openDevTools()
-        configWindow.on('closed', () => {
-            delete editWindows["config"];
-            log.debug(configWindow, "closed");
-            configWindow = null;
-        });
         editWindows["config"] = configWindow;
+        configWindow.on('closed', () => {
+            configWindow = null;
+            delete editWindows["config"];
+            log.debug("config windows closed");
+        });
+
     }
 }
 
@@ -456,9 +457,9 @@ function createEditWindow(id) {
     editWindow.loadURL('http://127.0.0.1:3000/edit.html?id=' + id + "&edit=" + editWinId);
     editWindow.webContents.openDevTools()
     editWindow.on('closed', () => {
+        log.debug(editWinId, "closed, editAccess=", JSON.stringify(editAccess));
         delete editAccess[id];
         delete editWindows[id];
-        log.debug(editWinId, "closed, editAccess=", JSON.stringify(editAccess));
         editWindow = null;
     });
     editAccess[id] = editWinId;

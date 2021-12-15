@@ -4,6 +4,7 @@ const fs = require('fs');
 const log = require('electron-log');
 const ActionType = require('./redo_action');
 const AWS = require('aws-sdk');
+const {S3Client, ListObjectsV2Command, ListObjectsV2CommandInput, GetObjectCommand} = require("@aws-sdk/client-s3");
 
 class SyncAws {
     constructor(conf) {
@@ -25,6 +26,18 @@ class SyncAws {
         });
         this.bucket = this.editor_conf.conf.cnf.sync.bucket;
         this.s3 = new AWS.S3({apiVersion: '2006-03-01'});
+        this.s3Client = new S3Client({
+            credentials: {
+                accessKeyId: this.editor_conf.conf.cnf.sync.access_key_id,
+                secretAccessKey: this.editor_conf.conf.cnf.sync.secret_access_key
+            },
+            accessKeyId: this.editor_conf.conf.cnf.sync.access_key_id,
+            secretAccessKey: this.editor_conf.conf.cnf.sync.secret_access_key,
+            region: this.editor_conf.conf.cnf.sync.region,
+
+            endpoint: this.editor_conf.conf.cnf.sync.endpoint,
+            apiVersion: '2006-03-01'
+        })
     }
 
     #shouldInitAws() {
@@ -36,6 +49,9 @@ class SyncAws {
     }
 
     uploadObjectToS3(file_path, target_path) {
+        if (!this.has_aws) {
+            return
+        }
         let uploadParams = {
             Bucket: this.bucket,
             Key: target_path,
@@ -74,10 +90,80 @@ class SyncAws {
         } else {
             log.error("please init aws before use");
         }
+    }
+
+    // async downloadS3ObjectSync(save_full_path, key) {
+    //     try {
+    //         const params = {
+    //             Bucket: this.bucket,
+    //             Key: key
+    //         }
+    //         const {Body} = await this.s3.getObject(params);
+    //     }
+    //
+    //     // try {
+    //     //     const params = {
+    //     //         Bucket: this.bucket,
+    //     //         Key: key
+    //     //     }
+    //     //     const data = await this.s3.getObject(params).promise();
+    //     //     return data.Body.toString();
+    //     // }
+    // }
+
+    async downloadObjectSync(prefix, key, workspace) {
+        if (!this.has_aws) {
+            return
+        }
+        log.info("start to download object: ", key);
+        try {
+            const {Body} = await this.s3Client.send(new GetObjectCommand({
+                Bucket: this.bucket,
+                Key: key
+            }))
+            let save_full_path = path.join(workspace, prefix, key.replaceAll(prefix + "/", ""));
+            log.info("save", key, "to", save_full_path);
+            await Body.pipe(fs.createWriteStream(save_full_path)).on('error', err => {
+                log.error(err);
+            }).on('close', () => {
+                log.info("close stream");
+            })
+            // const bodyContents = await streamToString(Body);
+            // fs.writeFile(save_full_path,)
+        } catch (e) {
+            log.error(e)
+        }
+    }
+
+    async downloadImageSync(prefix, key, workspace) {
 
     }
 
+    async listObjectsInS3ToPull(prefix, workspace) {
+        if (!this.has_aws || prefix === "" || prefix.endsWith("/")) {
+            return
+        }
+        log.info("start to list object", prefix);
+        try {
+            let data = await this.s3Client.send(new ListObjectsV2Command({
+                Bucket: this.bucket,
+                Prefix: prefix,
+                MaxKeys: 10000
+            }));
+            for (const value of data.Contents) {
+                log.warn("key:", value.Key, " Size:", value.Size);
+                await this.downloadObjectSync(prefix, value.Key, workspace);
+            }
+        } catch (err) {
+            log.error(err);
+        }
+        log.info("end to list object");
+    }
+
     downloadObjectInS3(key, redo_point) {
+        if (!this.has_aws) {
+            return
+        }
         let params = {
             Bucket: this.bucket,
             Key: key
@@ -113,8 +199,34 @@ class ShelfRedo {
         this.#getGlobalAgeFromLocal();
     }
 
+    /**
+     * 初次从远程同步信息
+     *      需要同步的信息：
+     *          book/
+     *          note/
+     *          image/
+     *          redo/global.age.json
+     */
+    async firstPullFromRemote() {
+        for (const value of ShelfRedo.#SUB_FILE_PATH) {
+            log.info("try to sync", value);
+            await this.sync_aws.listObjectsInS3ToPull(value, this.workdir);
+        }
+        await this.sync_aws.downloadObjectSync("redo", "redo/global.age.json", this.workdir);
+        log.info("get all message successful!");
+    }
+
+    syncObjectsWithContents(contents) {
+        contents.forEach((value) => {
+            log.warn("key:", value.Key, " Size:", value.Size);
+
+        })
+    }
+
+
     listObjectsInBucket() {
-        this.sync_aws.listObjectsInS3("");
+        this.sync_aws.listObjectsInS3ToPull("", this.workdir).then(r => {
+        });
     }
 
     #getGlobalAgeFromLocal() {
@@ -128,19 +240,25 @@ class ShelfRedo {
          */
         if (fs.existsSync(this.global_age_file)) {
             this.global_age = JSON.parse(fs.readFileSync(this.global_age_file, 'utf8'));
+            this.tryToSyncGlobalAgeObject().then(() => this.global_age = JSON.parse(fs.readFileSync(this.global_age_file, 'utf8')));
         } else {
+            // try to sync from remote
+            this.tryToSyncGlobalAgeObject().then(() => {
+                log.info("sync from remote done");
+                this.firstPullFromRemote().then(() => this.global_age = JSON.parse(fs.readFileSync(this.global_age_file, 'utf8')));
+            })//todo
             this.global_age = {
                 age: 0,
                 the_client_before_last_client: "",
                 last_client: ""
             }
         }
-        this.tryToSyncGlobalAgeObject();
+
     }
 
-    tryToSyncGlobalAgeObject() {
+    async tryToSyncGlobalAgeObject() {
         log.debug("try to sync global age object");
-        this.sync_aws.downloadObjectInS3(ShelfRedo.#GLOBAL_AGE_OBJECT_KEY, this);
+        await this.sync_aws.downloadObjectSync(ShelfRedo.#REDO_PATH, ShelfRedo.#GLOBAL_AGE_OBJECT_KEY, this.workdir);
     }
 
     tryToGetGlobalAgeObject() {
@@ -155,6 +273,7 @@ class ShelfRedo {
         // TODO: callback function handle upload failed
         this.sync_aws.uploadObjectToS3(this.global_age_file, ShelfRedo.#GLOBAL_AGE_OBJECT_KEY);
     }
+
 
     setGlobalAgeFromObject(err, data) {
         if (!err) {
